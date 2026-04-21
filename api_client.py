@@ -44,11 +44,9 @@ class OpenWeatherClient:
             logger.error(f"获取城市坐标异常: {e}")
             return None
 
+
     async def get_weather(self, lat: float, lon: float) -> Optional[Dict[str, Any]]:
-        """
-        获取天气数据
-        使用公制单位（摄氏度、米/秒）
-        """
+        """获取天气数据 (已增强)"""
         params = {
             "lat": lat,
             "lon": lon,
@@ -67,8 +65,13 @@ class OpenWeatherClient:
                     data = await resp.json()
                     return {
                         "city": data.get("name", "未知"),
+                        "country": data.get("sys", {}).get("country", ""),  # 新增：国家代码
+                        "dt": data.get("dt"),  # 新增：数据时间戳
+                        "timezone": data.get("timezone", 0),  # 新增：时区偏移
                         "temperature": round(data["main"]["temp"], 1),
                         "feels_like": round(data["main"]["feels_like"], 1),
+                        "temp_max": round(data["main"]["temp_max"], 1),  # 新增：最高气温
+                        "temp_min": round(data["main"]["temp_min"], 1),  # 新增：最低气温
                         "humidity": data["main"]["humidity"],
                         "pressure": data["main"]["pressure"],
                         "weather": data["weather"][0]["description"],
@@ -76,6 +79,8 @@ class OpenWeatherClient:
                         "wind_speed": round(data["wind"]["speed"], 1),
                         "wind_deg": data["wind"].get("deg", 0),
                         "clouds": data["clouds"]["all"],
+                        "visibility": data.get("visibility"),  # 新增：能见度
+                        "sys": data.get("sys", {}),  # 新增：系统数据（含日出日落）
                         "icon": data["weather"][0]["icon"]
                     }
         except Exception as e:
