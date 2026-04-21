@@ -197,6 +197,12 @@ class WeatherPlugin(Star):
             self.api_client.api_key = value
             msg = "✅ 和风天气 API Key 已更新"
 
+        elif key == "api_host":
+            user_config["api_host"] = value
+            self.config.api_host = value
+            self.api_client.api_host = value  # 动态更新 client 中的配置
+            msg = f"✅ API Host 已更新为: {value}"
+            
         elif key == "default_city":
             user_config["default_city"] = value
             self.config.default_city = value
