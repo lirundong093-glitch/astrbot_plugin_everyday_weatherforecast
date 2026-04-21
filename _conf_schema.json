@@ -10,7 +10,7 @@
     "description": "和风天气 API Host（在控制台-设置中查看，例如：abc123.def.qweatherapi.com）",
     "default": "",
     "required": true
-  }，
+  },
   "default_city": {
     "type": "string",
     "description": "默认城市名称（中文，如：北京）",
