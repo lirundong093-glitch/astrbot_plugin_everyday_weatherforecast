@@ -9,6 +9,7 @@ class PluginConfig:
 
     def __init__(self, plugin_dir: str):
         self.plugin_dir = plugin_dir
+        self.use_location_id = user_config.get("use_location_id") or defaults.get("use_location_id", False)
         self._config_path = os.path.join(plugin_dir, "_conf_schema.json")
         self._user_config_path = os.path.join(plugin_dir, "user_config.json")
         self._load_config()
