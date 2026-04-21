@@ -46,42 +46,65 @@ class OpenWeatherClient:
 
 
     async def get_weather(self, lat: float, lon: float) -> Optional[Dict[str, Any]]:
-        """获取天气数据 (已增强)"""
+        """获取天气数据 (使用 One Call API 3.0 获取准确的高低温度)"""
+        # 注意：需要将 API 端点更新为 3.0 版本以获取准确的每日温度
+        # 如果你的 API 密钥已订阅 One Call 3.0，请使用此 URL
+        # url = "https://api.openweathermap.org/data/3.0/onecall"
+        # 如果未订阅，可暂时使用 2.5 版本 (同样支持每日预报)
+        url = "https://api.openweathermap.org/data/2.5/onecall"
+    
         params = {
             "lat": lat,
             "lon": lon,
+            "exclude": "minutely,hourly",  # 排除不需要的数据以减小响应体积
             "appid": self.api_key,
             "units": "metric",
             "lang": "zh_cn"
         }
-
+    
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(self.WEATHER_URL, params=params) as resp:
+                async with session.get(url, params=params) as resp:
                     if resp.status != 200:
                         logger.error(f"Weather API 请求失败: {resp.status}")
                         return None
 
                     data = await resp.json()
+                
+                    # 提取当前天气数据
+                    current = data.get("current", {})
+                    daily = data.get("daily", [])
+                
+                    # 获取今日最高/最低气温
+                    temp_max = current.get("temp", 0)
+                    temp_min = current.get("temp", 0)
+                    if daily:
+                        today = daily[0]
+                        temp_max = today.get("temp", {}).get("max", current.get("temp", 0))
+                        temp_min = today.get("temp", {}).get("min", current.get("temp", 0))
+
                     return {
-                        "city": data.get("name", "未知"),
-                        "country": data.get("sys", {}).get("country", ""),  # 新增：国家代码
-                        "dt": data.get("dt"),  # 新增：数据时间戳
-                        "timezone": data.get("timezone", 0),  # 新增：时区偏移
-                        "temperature": round(data["main"]["temp"], 1),
-                        "feels_like": round(data["main"]["feels_like"], 1),
-                        "temp_max": round(data["main"]["temp_max"], 1),  # 新增：最高气温
-                        "temp_min": round(data["main"]["temp_min"], 1),  # 新增：最低气温
-                        "humidity": data["main"]["humidity"],
-                        "pressure": data["main"]["pressure"],
-                        "weather": data["weather"][0]["description"],
-                        "weather_main": data["weather"][0]["main"],
-                        "wind_speed": round(data["wind"]["speed"], 1),
-                        "wind_deg": data["wind"].get("deg", 0),
-                        "clouds": data["clouds"]["all"],
-                        "visibility": data.get("visibility"),  # 新增：能见度
-                        "sys": data.get("sys", {}),  # 新增：系统数据（含日出日落）
-                        "icon": data["weather"][0]["icon"]
+                        "city": data.get("timezone", "未知").split("/")[-1],  # 使用地理编码返回的城市名会更好
+                        # 移除了 "country" 字段，从而在图片上只显示城市名
+                        "dt": current.get("dt"),
+                        "timezone": data.get("timezone_offset", 0),
+                        "temperature": round(current.get("temp", 0), 1),
+                        "feels_like": round(current.get("feels_like", 0), 1),
+                        "temp_max": round(temp_max, 1),  # 从 daily 预报中获取的准确最高温度
+                        "temp_min": round(temp_min, 1),  # 从 daily 预报中获取的准确最低温度
+                        "humidity": current.get("humidity", 0),
+                        "pressure": current.get("pressure", 0),
+                        "weather": current.get("weather", [{}])[0].get("description", "未知"),
+                        "weather_main": current.get("weather", [{}])[0].get("main", ""),
+                        "wind_speed": round(current.get("wind_speed", 0), 1),
+                        "wind_deg": current.get("wind_deg", 0),
+                        "clouds": current.get("clouds", 0),
+                        "visibility": current.get("visibility"),
+                        "sys": {
+                            "sunrise": current.get("sunrise"),
+                            "sunset": current.get("sunset")
+                        },
+                        "icon": current.get("weather", [{}])[0].get("icon", "01d")
                     }
         except Exception as e:
             logger.error(f"获取天气数据异常: {e}")
