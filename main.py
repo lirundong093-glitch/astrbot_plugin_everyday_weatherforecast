@@ -86,7 +86,7 @@ class WeatherPlugin(Star):
                 # 构建消息链
                 chain = [
                     Comp.Plain(f"☀️ 每日天气预报 - {self.config.default_city}"),
-                    Comp.Image.from_bytes(image_bytes)
+                    Comp.Image(file=image_bytes) 
                 ]
                 await self.context.send_message(group_id, chain)
                 await asyncio.sleep(0.5)  # 避免发送过快
@@ -129,7 +129,7 @@ class WeatherPlugin(Star):
         # 发送图片
         chain = [
             Comp.Plain(f"📍 {city} 当前天气："),
-            Comp.Image.from_bytes(image_bytes)
+            Comp.Image(file=image_bytes)
         ]
         yield event.chain_result(chain)
 
