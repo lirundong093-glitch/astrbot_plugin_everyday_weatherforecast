@@ -1,111 +1,222 @@
 import aiohttp
+import asyncio
 from typing import Optional, Tuple, Dict, Any
 from astrbot.api import logger
 
 
-class OpenWeatherClient:
-    """OpenWeather API 客户端"""
+class QWeatherClient:
+    """和风天气 API 客户端"""
 
-    GEO_URL = "http://api.openweathermap.org/geo/1.0/direct"
-    WEATHER_URL = "https://api.openweathermap.org/data/2.5/weather"
+    # 和风天气 API 端点 (注意区分 GeoAPI 和 devapi)
+    GEO_URL = "https://geoapi.qweather.com/v2/city/lookup"
+    WEATHER_NOW_URL = "https://devapi.qweather.com/v7/weather/now"
+    WEATHER_DAILY_URL = "https://devapi.qweather.com/v7/weather/7d"
+    AIR_QUALITY_URL = "https://devapi.qweather.com/v7/air/now"
+    INDICES_URL = "https://devapi.qweather.com/v7/indices/1d"
+
+    # 需要的生活指数类型 ID (按用户需求)
+    INDICES_TYPES = "1,2,5,6,7,8,10,12,13,14"  # 运动、穿衣、紫外线、旅游、感冒、空气污染扩散、空调开启、晾晒、交通、防晒
 
     def __init__(self, api_key: str):
         self.api_key = api_key
 
-    async def get_coordinates(self, city_name: str) -> Optional[Tuple[float, float, str]]:
+    async def get_location_id(self, city_name: str) -> Optional[Tuple[str, str]]:
         """
-        通过城市名获取经纬度坐标
-        返回: (lat, lon, display_name) 或 None
+        通过城市名获取 Location ID 和显示名称
+        返回: (location_id, display_name) 或 None
         """
         params = {
-            "q": city_name,
-            "limit": 1,
-            "appid": self.api_key
+            "location": city_name,
+            "key": self.api_key,
+            "number": 1
         }
 
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(self.GEO_URL, params=params) as resp:
                     if resp.status != 200:
-                        logger.error(f"Geocoding API 请求失败: {resp.status}")
+                        logger.error(f"GeoAPI 请求失败: {resp.status}")
                         return None
 
                     data = await resp.json()
-                    if not data:
+                    if data.get("code") != "200":
+                        logger.error(f"GeoAPI 返回错误: {data.get('code')}")
+                        return None
+
+                    locations = data.get("location", [])
+                    if not locations:
                         logger.warning(f"未找到城市: {city_name}")
                         return None
 
-                    item = data[0]
-                    lat = item.get("lat")
-                    lon = item.get("lon")
-                    name = item.get("local_names", {}).get("zh") or item.get("name", city_name)
-                    return (lat, lon, name)
+                    loc = locations[0]
+                    location_id = loc.get("id")
+                    display_name = loc.get("name", city_name)
+                    return (location_id, display_name)
         except Exception as e:
             logger.error(f"获取城市坐标异常: {e}")
             return None
 
-
-    async def get_weather(self, lat: float, lon: float) -> Optional[Dict[str, Any]]:
-        """获取天气数据 (使用 One Call API 3.0 获取准确的高低温度)"""
-        # 注意：需要将 API 端点更新为 3.0 版本以获取准确的每日温度
-        # 如果你的 API 密钥已订阅 One Call 3.0，请使用此 URL
-        # url = "https://api.openweathermap.org/data/3.0/onecall"
-        # 如果未订阅，可暂时使用 2.5 版本 (同样支持每日预报)
-        url = "https://api.openweathermap.org/data/2.5/onecall"
-    
+    async def get_weather_now(self, location_id: str) -> Optional[Dict[str, Any]]:
+        """获取实时天气数据"""
         params = {
-            "lat": lat,
-            "lon": lon,
-            "exclude": "minutely,hourly",  # 排除不需要的数据以减小响应体积
-            "appid": self.api_key,
-            "units": "metric",
-            "lang": "zh_cn"
+            "location": location_id,
+            "key": self.api_key
         }
-    
+
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(url, params=params) as resp:
+                async with session.get(self.WEATHER_NOW_URL, params=params) as resp:
                     if resp.status != 200:
-                        logger.error(f"Weather API 请求失败: {resp.status}")
+                        logger.error(f"Weather Now API 请求失败: {resp.status}")
                         return None
 
                     data = await resp.json()
-                
-                    # 提取当前天气数据
-                    current = data.get("current", {})
-                    daily = data.get("daily", [])
-                
-                    # 获取今日最高/最低气温
-                    temp_max = current.get("temp", 0)
-                    temp_min = current.get("temp", 0)
-                    if daily:
-                        today = daily[0]
-                        temp_max = today.get("temp", {}).get("max", current.get("temp", 0))
-                        temp_min = today.get("temp", {}).get("min", current.get("temp", 0))
+                    if data.get("code") != "200":
+                        logger.error(f"Weather Now API 返回错误: {data.get('code')}")
+                        return None
 
-                    return {
-                        "city": data.get("timezone", "未知").split("/")[-1],  # 使用地理编码返回的城市名会更好
-                        # 移除了 "country" 字段，从而在图片上只显示城市名
-                        "dt": current.get("dt"),
-                        "timezone": data.get("timezone_offset", 0),
-                        "temperature": round(current.get("temp", 0), 1),
-                        "feels_like": round(current.get("feels_like", 0), 1),
-                        "temp_max": round(temp_max, 1),  # 从 daily 预报中获取的准确最高温度
-                        "temp_min": round(temp_min, 1),  # 从 daily 预报中获取的准确最低温度
-                        "humidity": current.get("humidity", 0),
-                        "pressure": current.get("pressure", 0),
-                        "weather": current.get("weather", [{}])[0].get("description", "未知"),
-                        "weather_main": current.get("weather", [{}])[0].get("main", ""),
-                        "wind_speed": round(current.get("wind_speed", 0), 1),
-                        "wind_deg": current.get("wind_deg", 0),
-                        "clouds": current.get("clouds", 0),
-                        "visibility": current.get("visibility"),
-                        "sys": {
-                            "sunrise": current.get("sunrise"),
-                            "sunset": current.get("sunset")
-                        },
-                        "icon": current.get("weather", [{}])[0].get("icon", "01d")
-                    }
+                    return data
         except Exception as e:
-            logger.error(f"获取天气数据异常: {e}")
+            logger.error(f"获取实时天气异常: {e}")
             return None
+
+    async def get_weather_daily(self, location_id: str) -> Optional[Dict[str, Any]]:
+        """获取每日天气预报（7天）"""
+        params = {
+            "location": location_id,
+            "key": self.api_key
+        }
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(self.WEATHER_DAILY_URL, params=params) as resp:
+                    if resp.status != 200:
+                        logger.error(f"Weather Daily API 请求失败: {resp.status}")
+                        return None
+
+                    data = await resp.json()
+                    if data.get("code") != "200":
+                        logger.error(f"Weather Daily API 返回错误: {data.get('code')}")
+                        return None
+
+                    return data
+        except Exception as e:
+            logger.error(f"获取每日预报异常: {e}")
+            return None
+
+    async def get_air_quality(self, location_id: str) -> Optional[Dict[str, Any]]:
+        """获取实时空气质量 AQI"""
+        params = {
+            "location": location_id,
+            "key": self.api_key
+        }
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(self.AIR_QUALITY_URL, params=params) as resp:
+                    if resp.status != 200:
+                        logger.error(f"Air Quality API 请求失败: {resp.status}")
+                        return None
+
+                    data = await resp.json()
+                    if data.get("code") != "200":
+                        logger.error(f"Air Quality API 返回错误: {data.get('code')}")
+                        return None
+
+                    return data
+        except Exception as e:
+            logger.error(f"获取空气质量异常: {e}")
+            return None
+
+    async def get_indices(self, location_id: str) -> Optional[Dict[str, Any]]:
+        """获取天气生活指数"""
+        params = {
+            "location": location_id,
+            "key": self.api_key,
+            "type": self.INDICES_TYPES
+        }
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(self.INDICES_URL, params=params) as resp:
+                    if resp.status != 200:
+                        logger.error(f"Indices API 请求失败: {resp.status}")
+                        return None
+
+                    data = await resp.json()
+                    if data.get("code") != "200":
+                        logger.error(f"Indices API 返回错误: {data.get('code')}")
+                        return None
+
+                    return data
+        except Exception as e:
+            logger.error(f"获取生活指数异常: {e}")
+            return None
+
+    async def get_complete_weather(self, city: str) -> Optional[Dict[str, Any]]:
+        """
+        获取完整的天气数据，整合多个 API 返回
+        """
+        # 1. 获取 Location ID
+        loc_result = await self.get_location_id(city)
+        if not loc_result:
+            return None
+        location_id, display_name = loc_result
+
+        # 2. 并发请求所有 API
+        async with asyncio.TaskGroup() as tg:
+            task_now = tg.create_task(self.get_weather_now(location_id))
+            task_daily = tg.create_task(self.get_weather_daily(location_id))
+            task_aqi = tg.create_task(self.get_air_quality(location_id))
+            task_indices = tg.create_task(self.get_indices(location_id))
+
+        now_data = task_now.result()
+        daily_data = task_daily.result()
+        aqi_data = task_aqi.result()
+        indices_data = task_indices.result()
+
+        if not now_data or not daily_data:
+            logger.error("获取天气数据失败")
+            return None
+
+        # 3. 整合数据
+        now = now_data.get("now", {})
+        daily_list = daily_data.get("daily", [])
+        today = daily_list[0] if daily_list else {}
+
+        # 构建统一的返回结构（兼容原有 image_generator 的字段名）
+        result = {
+            "city": display_name,
+            # 实时天气
+            "temperature": float(now.get("temp", 0)),
+            "feels_like": float(now.get("feelsLike", 0)),
+            "humidity": int(now.get("humidity", 0)),
+            "pressure": int(now.get("pressure", 0)),
+            "wind_speed": float(now.get("windSpeed", 0)),
+            "wind_deg": int(now.get("wind360", 0)),
+            "wind_dir": now.get("windDir", ""),
+            "vis": float(now.get("vis", 0)),
+            "cloud": int(now.get("cloud", 0)),
+            "icon": now.get("icon", "100"),
+            "weather": now.get("text", ""),
+            "update_time": now_data.get("updateTime", ""),
+            # 每日预报（今日）
+            "temp_max": float(today.get("tempMax", 0)),
+            "temp_min": float(today.get("tempMin", 0)),
+            "sunrise": today.get("sunrise", ""),
+            "sunset": today.get("sunset", ""),
+            "moonrise": today.get("moonrise", ""),
+            "moonset": today.get("moonset", ""),
+            "moon_phase": today.get("moonPhase", ""),
+            "uv_index": today.get("uvIndex", 0),
+            # 空气质量
+            "aqi": aqi_data.get("now", {}).get("aqi", "") if aqi_data else "",
+            "aqi_category": aqi_data.get("now", {}).get("category", "") if aqi_data else "",
+            # 生活指数
+            "indices": indices_data.get("daily", []) if indices_data else [],
+            # 原始数据保留
+            "raw_daily": daily_list,
+            "raw_now": now_data,
+        }
+
+        return result
