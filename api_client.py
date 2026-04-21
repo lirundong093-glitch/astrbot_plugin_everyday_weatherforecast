@@ -161,12 +161,19 @@ class QWeatherClient:
             logger.error(f"并发请求 API 异常: {e}", exc_info=True)
             return None
 
-        # 检查关键数据
-        if isinstance(now_data, Exception) or isinstance(daily_data, Exception):
-            logger.error("now 或 daily API 请求发生异常")
-            return None
+        # 详细记录每个 API 的返回状态
+        api_names = ["now", "daily", "aqi", "indices"]
+        results = [now_data, daily_data, aqi_data, indices_data]
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                logger.error(f"{api_names[i]} API 请求异常: {result}")
+            elif result is None:
+                logger.error(f"{api_names[i]} API 返回 None（可能是请求失败或业务错误）")
+            else:
+                logger.info(f"{api_names[i]} API 请求成功")
+
         if now_data is None or daily_data is None:
-            logger.error("获取天气数据失败（now 或 daily 为 None）")
+            logger.error("获取天气数据失败（now 或 daily 为 None），终止处理")
             return None
 
         # 3. 整合数据
@@ -204,3 +211,4 @@ class QWeatherClient:
         }
 
         return result
+
