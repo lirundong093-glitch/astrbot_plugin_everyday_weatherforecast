@@ -17,11 +17,21 @@ class PluginConfig:
         """加载配置文件"""
         defaults = self._load_defaults()
         user_config = self._load_user_config()
-        # 合并配置，用户配置覆盖默认值
-        self.api_key = user_config.get("api_key") or defaults.get("api_key", "")
+
+        # 和风天气配置
+        self.qweather_key = user_config.get("qweather_key") or defaults.get("qweather_key", "")
         self.default_city = user_config.get("default_city") or defaults.get("default_city", "北京")
         self.daily_push_time = user_config.get("daily_push_time") or defaults.get("daily_push_time", "08:00")
         self.whitelist_groups = user_config.get("whitelist_groups") or defaults.get("whitelist_groups", [])
+
+        # LLM 配置
+        self.llm_enabled = user_config.get("llm_enabled")
+        if self.llm_enabled is None:
+            self.llm_enabled = defaults.get("llm_enabled", False)
+        self.llm_provider = user_config.get("llm_provider") or defaults.get("llm_provider", "openai")
+        self.llm_api_key = user_config.get("llm_api_key") or defaults.get("llm_api_key", "")
+        self.llm_base_url = user_config.get("llm_base_url") or defaults.get("llm_base_url", "")
+        self.llm_model = user_config.get("llm_model") or defaults.get("llm_model", "gpt-4o-mini")
 
     def _load_defaults(self) -> dict:
         """从 _conf_schema.json 加载默认值"""
@@ -54,5 +64,5 @@ class PluginConfig:
     def is_group_allowed(self, group_id: str) -> bool:
         """检查群聊是否在白名单中"""
         if not self.whitelist_groups:
-            return True  # 白名单为空时允许所有群
+            return True
         return str(group_id) in [str(g) for g in self.whitelist_groups]
