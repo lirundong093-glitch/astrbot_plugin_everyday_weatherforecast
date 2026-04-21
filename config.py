@@ -9,7 +9,6 @@ class PluginConfig:
 
     def __init__(self, plugin_dir: str):
         self.plugin_dir = plugin_dir
-        self.use_location_id = user_config.get("use_location_id") or defaults.get("use_location_id", False)
         self._config_path = os.path.join(plugin_dir, "_conf_schema.json")
         self._user_config_path = os.path.join(plugin_dir, "user_config.json")
         self._load_config()
@@ -17,14 +16,15 @@ class PluginConfig:
     def _load_config(self):
         """加载配置文件"""
         defaults = self._load_defaults()
-        user_config = self._load_user_config()
+        user_config = self._load_user_config()  # ✅ 关键：在这里定义 user_config
 
         # 和风天气配置
-        self.api_host = user_config.get("api_host") or defaults.get("api_host", "")
         self.qweather_key = user_config.get("qweather_key") or defaults.get("qweather_key", "")
+        self.api_host = user_config.get("api_host") or defaults.get("api_host", "")
         self.default_city = user_config.get("default_city") or defaults.get("default_city", "北京")
         self.daily_push_time = user_config.get("daily_push_time") or defaults.get("daily_push_time", "08:00")
         self.whitelist_groups = user_config.get("whitelist_groups") or defaults.get("whitelist_groups", [])
+        self.use_location_id = user_config.get("use_location_id") or defaults.get("use_location_id", False)
 
         # LLM 配置
         self.llm_enabled = user_config.get("llm_enabled")
