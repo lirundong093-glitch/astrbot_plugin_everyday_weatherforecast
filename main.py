@@ -173,6 +173,7 @@ class WeatherPlugin(Star):
             # 显示当前配置
             info = f"""📋 当前配置：
 • 和风天气 Key: {'已设置' if self.config.qweather_key else '❌ 未设置'}
+• API Host: {self.config.api_host or '❌ 未设置'}
 • 默认城市: {self.config.default_city}
 • 推送时间: {self.config.daily_push_time or '未设置'}
 • 白名单群: {', '.join(self.config.whitelist_groups) if self.config.whitelist_groups else '全部群聊'}
@@ -202,11 +203,12 @@ class WeatherPlugin(Star):
             msg = "✅ 和风天气 API Key 已更新"
 
         elif key == "api_host":
-            user_config["api_host"] = value
-            self.config.api_host = value
-            self.api_client.api_host = value  # 动态更新 client 中的配置
+            user_config["api_host"] = value.strip()
+            self.config.api_host = value.strip()
+            self.api_client.api_host = value.strip()   # 动态更新客户端中的值
+            self.api_client._build_endpoints()         # 重新构建 URL
             msg = f"✅ API Host 已更新为: {value}"
-
+        
         elif key == "default_city":
             user_config["default_city"] = value
             self.config.default_city = value
