@@ -17,7 +17,7 @@ class WeatherPlugin(Star):
         super().__init__(context)
 
         # 初始化配置
-        self.plugin_dir = context.plugin_dir
+        self.plugin_dir = os.path.dirname(os.path.abspath(__file__)) 
         self.config = PluginConfig(self.plugin_dir)
 
         # 初始化API客户端
