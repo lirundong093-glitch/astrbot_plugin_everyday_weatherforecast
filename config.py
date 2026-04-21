@@ -19,6 +19,7 @@ class PluginConfig:
         user_config = self._load_user_config()
 
         # 和风天气配置
+        self.api_host = user_config.get("api_host") or defaults.get("api_host", "")
         self.qweather_key = user_config.get("qweather_key") or defaults.get("qweather_key", "")
         self.default_city = user_config.get("default_city") or defaults.get("default_city", "北京")
         self.daily_push_time = user_config.get("daily_push_time") or defaults.get("daily_push_time", "08:00")
