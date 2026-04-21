@@ -8,7 +8,7 @@ class QWeatherClient:
     """和风天气 API 客户端"""
 
     # 和风天气 API 端点 (注意区分 GeoAPI 和 devapi)
-    GEO_URL = "https://geoapi.qweather.com/v2/city/lookup"
+    GEO_URL = "https://devapi.qweather.com/v2/city/lookup"
     WEATHER_NOW_URL = "https://devapi.qweather.com/v7/weather/now"
     WEATHER_DAILY_URL = "https://devapi.qweather.com/v7/weather/7d"
     AIR_QUALITY_URL = "https://devapi.qweather.com/v7/air/now"
