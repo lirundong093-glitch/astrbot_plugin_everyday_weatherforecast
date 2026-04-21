@@ -18,7 +18,7 @@
     "required": false
   },
   "whitelist_groups": {
-    "type": "array",
+    "type": "list",
     "description": "群聊白名单（群号列表，仅这些群可触发指令和接收定时推送）",
     "default": [],
     "required": false
