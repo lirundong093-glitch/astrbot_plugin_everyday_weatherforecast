@@ -10,22 +10,17 @@ class QWeatherClient:
     """和风天气 API 客户端（使用本地 CSV 城市列表 + GeoAPI 降级）"""
 
     def __init__(self, api_key: str, api_host: str = "", plugin_dir: str = ""):
-        # 打印原始接收值，便于调试
-        logger.info(f"QWeatherClient 初始化接收: api_key={'已设置' if api_key else '未设置'}, api_host='{api_host}', plugin_dir='{plugin_dir}'")
-
+        logger.info(f"QWeatherClient 初始化: api_key={'已设置' if api_key else '未设置'}, api_host='{api_host}'")
         self.api_key = api_key
-        # 清洗 API Host：移除可能误输入的 https:// 前缀和尾部斜杠，并去除空格
         raw_host = api_host.strip() if api_host else ""
         self.api_host = raw_host.replace("https://", "").replace("http://", "").rstrip('/')
         logger.info(f"清洗后 api_host: '{self.api_host}'")
-
         self.plugin_dir = plugin_dir
         self._city_id_map = {}
         self._load_city_list()
         self._build_endpoints()
 
     def _load_city_list(self):
-        """从 CSV 文件加载城市中文名与 Location ID 的映射"""
         csv_path = os.path.join(self.plugin_dir, "China-City-List-latest.csv")
         if not os.path.exists(csv_path):
             logger.warning(f"城市列表文件不存在: {csv_path}，将仅依赖 GeoAPI 查询")
@@ -46,7 +41,6 @@ class QWeatherClient:
             logger.error(f"加载城市列表失败: {e}")
 
     def _build_endpoints(self):
-        """根据 API Host 动态构建完整的端点 URL"""
         if not self.api_host:
             logger.error("未配置 API Host，无法构建请求 URL。请使用 /weather_config api_host 进行配置。")
             self.GEO_URL = ""
@@ -66,7 +60,6 @@ class QWeatherClient:
     INDICES_TYPES = "1,2,5,6,7,8,10,12,13,14"
 
     async def _request(self, url: str, params: dict) -> Optional[Dict[str, Any]]:
-        """统一发起请求，添加 X-QW-Api-Key 头"""
         if not url:
             logger.error("请求 URL 为空，请检查 API Host 配置")
             return None
@@ -76,14 +69,16 @@ class QWeatherClient:
             "User-Agent": "AstrBot-Weather-Plugin/2.0"
         }
 
-        logger.debug(f"发起请求: {url}?{aiohttp.helpers.build_query(params)}")
+        # 简单记录请求 URL（不依赖 helpers）
+        param_str = "&".join(f"{k}={v}" for k, v in params.items())
+        logger.debug(f"请求 URL: {url}?{param_str}")
 
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, params=params, headers=headers) as resp:
                     if resp.status != 200:
                         error_text = await resp.text()
-                        logger.error(f"API 请求失败: {url}\n状态码: {resp.status}\n响应: {error_text[:500]}")
+                        logger.error(f"API 请求失败: {url} 状态码: {resp.status}, 响应: {error_text[:300]}")
                         return None
                     data = await resp.json()
                     if data.get("code") != "200":
@@ -95,7 +90,6 @@ class QWeatherClient:
             return None
 
     async def _get_location_id_from_geoapi(self, city_name: str) -> Optional[Tuple[str, str]]:
-        """通过 GeoAPI 获取 Location ID 和显示名称"""
         if not self.GEO_URL:
             return None
         params = {"location": city_name, "number": 1}
@@ -110,7 +104,6 @@ class QWeatherClient:
         return (loc.get("id"), loc.get("name", city_name))
 
     async def get_location_id(self, city_name: str) -> Optional[Tuple[str, str]]:
-        """获取 Location ID，优先本地 CSV，失败则 GeoAPI"""
         loc_id = self._city_id_map.get(city_name)
         if loc_id:
             logger.info(f"从本地 CSV 匹配到 LocationID: {city_name} -> {loc_id}")
@@ -160,6 +153,7 @@ class QWeatherClient:
             logger.error(f"并发请求 API 异常: {e}", exc_info=True)
             return None
 
+        # 检查各个 API 是否返回了异常或 None
         api_names = ["now", "daily", "aqi", "indices"]
         results = [now_data, daily_data, aqi_data, indices_data]
         for i, result in enumerate(results):
@@ -170,8 +164,12 @@ class QWeatherClient:
             else:
                 logger.info(f"{api_names[i]} API 请求成功")
 
-        if now_data is None or daily_data is None:
-            logger.error("获取天气数据失败（now 或 daily 为 None），终止处理")
+        # 必须确保 now 和 daily 是有效的字典
+        if isinstance(now_data, Exception) or now_data is None:
+            logger.error("now API 数据无效")
+            return None
+        if isinstance(daily_data, Exception) or daily_data is None:
+            logger.error("daily API 数据无效")
             return None
 
         now = now_data.get("now", {})
