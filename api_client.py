@@ -42,11 +42,13 @@ class QWeatherClient:
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, params=params, headers=headers) as resp:
                     if resp.status != 200:
-                        logger.error(f"API 请求失败: {url} {resp.status}")
+                        # 关键修改：读取并打印完整的错误响应体
+                        error_text = await resp.text()
+                        logger.error(f"API 请求失败: {url} 状态码: {resp.status}, 响应内容: {error_text}")
                         return None
                     data = await resp.json()
                     if data.get("code") != "200":
-                        logger.error(f"API 返回错误: {data.get('code')}")
+                        logger.error(f"API 返回错误: 状态码={resp.status}, 响应体={data}")
                         return None
                     return data
         except Exception as e:
