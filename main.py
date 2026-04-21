@@ -206,7 +206,14 @@ class WeatherPlugin(Star):
             self.config.api_host = value
             self.api_client.api_host = value  # 动态更新 client 中的配置
             msg = f"✅ API Host 已更新为: {value}"
-            
+
+        elif key == "use_location_id":
+            enabled = value.lower() in ["true", "1", "yes", "on"]
+            user_config["use_location_id"] = enabled
+            self.config.use_location_id = enabled
+            self.api_client.use_location_id = enabled
+            msg = f"✅ LocationID 查询模式已{'开启' if enabled else '关闭'} (关闭后将直接使用城市名查询)"
+    
         elif key == "default_city":
             user_config["default_city"] = value
             self.config.default_city = value
