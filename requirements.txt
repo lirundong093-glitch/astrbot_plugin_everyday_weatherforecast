@@ -2,3 +2,4 @@ Pillow
 pytz
 aiohttp
 apscheduler
+cairosvg
