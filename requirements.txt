@@ -1,0 +1,4 @@
+Pillow
+pytz
+aiohttp
+apscheduler

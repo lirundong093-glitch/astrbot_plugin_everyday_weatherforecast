@@ -1,0 +1,26 @@
+{
+  "api_key": {
+    "type": "string",
+    "description": "OpenWeather API密钥",
+    "default": "",
+    "required": true
+  },
+  "default_city": {
+    "type": "string",
+    "description": "默认城市名称（中文，如：北京）",
+    "default": "北京",
+    "required": true
+  },
+  "daily_push_time": {
+    "type": "string",
+    "description": "每日定时发送时间（格式 HH:MM，如 08:00）",
+    "default": "08:00",
+    "required": false
+  },
+  "whitelist_groups": {
+    "type": "array",
+    "description": "群聊白名单（群号列表，仅这些群可触发指令和接收定时推送）",
+    "default": [],
+    "required": false
+  }
+}
