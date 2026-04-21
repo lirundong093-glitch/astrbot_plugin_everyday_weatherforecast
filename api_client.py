@@ -5,12 +5,11 @@ from astrbot.api import logger
 
 
 class QWeatherClient:
-    """和风天气 API 客户端 (兼容 Python 3.7+ 版本)"""
+    """和风天气 API 客户端 (始终使用 LocationID 查询)"""
 
-    def __init__(self, api_key: str, api_host: str = "", use_location_id: bool = False):
+    def __init__(self, api_key: str, api_host: str = ""):
         self.api_key = api_key
         self.api_host = api_host.rstrip('/')
-        self.use_location_id = use_location_id
         self._build_endpoints()
 
     def _build_endpoints(self):
@@ -42,17 +41,16 @@ class QWeatherClient:
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, params=params, headers=headers) as resp:
                     if resp.status != 200:
-                        # 关键修改：读取并打印完整的错误响应体
                         error_text = await resp.text()
-                        logger.error(f"API 请求失败: {url} 状态码: {resp.status}, 响应内容: {error_text}")
+                        logger.error(f"API 请求失败: {url} 状态码: {resp.status}, 响应: {error_text}")
                         return None
                     data = await resp.json()
                     if data.get("code") != "200":
-                        logger.error(f"API 返回错误: 状态码={resp.status}, 响应体={data}")
+                        logger.error(f"API 返回业务错误: {data}")
                         return None
                     return data
         except Exception as e:
-            logger.error(f"API 请求异常: {e}")
+            logger.error(f"API 请求异常: {e}", exc_info=True)
             return None
 
     async def get_location_id(self, city_name: str) -> Optional[Tuple[str, str]]:
@@ -70,54 +68,51 @@ class QWeatherClient:
         loc = locations[0]
         return (loc.get("id"), loc.get("name", city_name))
 
-    async def get_weather_now(self, location: str) -> Optional[Dict[str, Any]]:
-        """获取实时天气数据 (location 可为 LocationID 或城市名)"""
-        return await self._request(self.WEATHER_NOW_URL, {"location": location})
+    async def get_weather_now(self, location_id: str) -> Optional[Dict[str, Any]]:
+        """获取实时天气数据"""
+        return await self._request(self.WEATHER_NOW_URL, {"location": location_id})
 
-    async def get_weather_daily(self, location: str) -> Optional[Dict[str, Any]]:
+    async def get_weather_daily(self, location_id: str) -> Optional[Dict[str, Any]]:
         """获取每日天气预报（7天）"""
-        return await self._request(self.WEATHER_DAILY_URL, {"location": location})
+        return await self._request(self.WEATHER_DAILY_URL, {"location": location_id})
 
-    async def get_air_quality(self, location: str) -> Optional[Dict[str, Any]]:
+    async def get_air_quality(self, location_id: str) -> Optional[Dict[str, Any]]:
         """获取实时空气质量 AQI"""
-        return await self._request(self.AIR_QUALITY_URL, {"location": location})
+        return await self._request(self.AIR_QUALITY_URL, {"location": location_id})
 
-    async def get_indices(self, location: str) -> Optional[Dict[str, Any]]:
+    async def get_indices(self, location_id: str) -> Optional[Dict[str, Any]]:
         """获取天气生活指数"""
-        return await self._request(self.INDICES_URL, {"location": location, "type": self.INDICES_TYPES})
+        return await self._request(self.INDICES_URL, {"location": location_id, "type": self.INDICES_TYPES})
 
     async def get_complete_weather(self, city: str) -> Optional[Dict[str, Any]]:
         """获取完整的天气数据，整合多个 API 返回"""
-        logger.info(f"开始查询天气: {city} (use_location_id={self.use_location_id})")
+        logger.info(f"开始查询天气: {city}")
 
-        # 1. 确定查询参数
-        if self.use_location_id:
-            loc_result = await self.get_location_id(city)
-            if not loc_result:
-                return None
-            location_id, display_name = loc_result
-            logger.info(f"获取到 LocationID: {location_id}, 显示名称: {display_name}")
-        else:
-            location_id = city
-            display_name = city
+        # 1. 始终先通过 GeoAPI 获取 LocationID
+        loc_result = await self.get_location_id(city)
+        if not loc_result:
+            logger.error(f"获取 LocationID 失败: {city}")
+            return None
+        location_id, display_name = loc_result
+        logger.info(f"获取到 LocationID: {location_id}, 显示名称: {display_name}")
 
-        # 2. 并发请求所有 API (兼容 Python 3.7+)
-        logger.info(f"开始并发请求，查询参数: {location_id}")
+        # 2. 并发请求所有 API
+        logger.info(f"开始并发请求，LocationID: {location_id}")
         try:
-            results = await asyncio.gather(
+            now_data, daily_data, aqi_data, indices_data = await asyncio.gather(
                 self.get_weather_now(location_id),
                 self.get_weather_daily(location_id),
                 self.get_air_quality(location_id),
                 self.get_indices(location_id),
                 return_exceptions=True
             )
-            now_data, daily_data, aqi_data, indices_data = results
         except Exception as e:
             logger.error(f"并发请求 API 异常: {e}", exc_info=True)
             return None
 
-        # 详细记录每个 API 的返回状态
+        # 检查异常
         api_names = ["now", "daily", "aqi", "indices"]
+        results = [now_data, daily_data, aqi_data, indices_data]
         for i, result in enumerate(results):
             if isinstance(result, Exception):
                 logger.error(f"{api_names[i]} API 请求异常: {result}")
@@ -125,7 +120,7 @@ class QWeatherClient:
                 logger.error(f"{api_names[i]} API 返回 None")
             else:
                 logger.info(f"{api_names[i]} API 请求成功")
-        
+
         if now_data is None or daily_data is None:
             logger.error("获取天气数据失败（now 或 daily 为 None）")
             return None
