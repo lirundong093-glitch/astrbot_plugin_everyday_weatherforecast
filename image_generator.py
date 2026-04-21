@@ -95,14 +95,33 @@ class WeatherImageGenerator:
         return os.path.join(self.icon_dir, "999.svg")
 
     def _load_icon(self, icon_code: str, size: int = 100) -> Optional[Image.Image]:
-        """加载并缩放图标"""
+        """加载并缩放图标（支持 SVG 自动转 PNG）"""
         icon_path = self._get_icon_path(icon_code)
+        if not os.path.exists(icon_path):
+            logger.warning(f"图标文件不存在: {icon_path}")
+            return None
+    
         try:
-            # SVG 需要 cairosvg 或 svglib 支持，这里假设你已将 SVG 转为 PNG
-            # 如果图标已经是 PNG 格式，直接打开
-            icon = Image.open(icon_path)
-            icon = icon.resize((size, size), Image.Resampling.LANCZOS)
+            # 判断文件扩展名
+            ext = os.path.splitext(icon_path)[1].lower()
+            
+            if ext == '.svg':
+                # 使用 cairosvg 将 SVG 转换为 PNG 字节流
+                import cairosvg
+                png_bytes = cairosvg.svg2png(url=icon_path, output_width=size, output_height=size)
+                icon = Image.open(io.BytesIO(png_bytes))
+            else:
+                # 直接打开 PNG 等格式
+                icon = Image.open(icon_path)
+                icon = icon.resize((size, size), Image.Resampling.LANCZOS)
+        
+            # 确保图标为 RGBA 模式（支持透明背景）
+            if icon.mode != 'RGBA':
+                icon = icon.convert('RGBA')
             return icon
+        except ImportError:
+            logger.error("cairosvg 未安装，无法加载 SVG 图标。请执行: pip install cairosvg")
+            return None
         except Exception as e:
             logger.error(f"加载图标失败 {icon_code}: {e}")
             return None
