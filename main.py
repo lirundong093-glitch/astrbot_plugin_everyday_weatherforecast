@@ -27,8 +27,9 @@ class WeatherPlugin(Star):
 
         # 和风天气客户端
         self.api_client = QWeatherClient(
-        self.config.qweather_key, 
-        self.config.api_host,
+            self.config.qweather_key, 
+            self.config.api_host,
+            self.plugin_dir
         )
         
         # 图片生成器
