@@ -102,25 +102,32 @@ class QWeatherClient:
             display_name = city
 
         # 2. 并发请求所有 API (兼容 Python 3.7+)
+        logger.info(f"开始并发请求，查询参数: {location_id}")
         try:
-            now_data, daily_data, aqi_data, indices_data = await asyncio.gather(
+            results = await asyncio.gather(
                 self.get_weather_now(location_id),
                 self.get_weather_daily(location_id),
                 self.get_air_quality(location_id),
                 self.get_indices(location_id),
                 return_exceptions=True
             )
+            now_data, daily_data, aqi_data, indices_data = results
         except Exception as e:
-            logger.error(f"并发请求 API 异常: {e}")
+            logger.error(f"并发请求 API 异常: {e}", exc_info=True)
             return None
 
-        # 检查是否有异常
-        if isinstance(now_data, Exception) or isinstance(daily_data, Exception):
-            logger.error(f"获取天气数据时发生异常")
-            return None
-
-        if not now_data or not daily_data:
-            logger.error("获取天气数据失败")
+        # 详细记录每个 API 的返回状态
+        api_names = ["now", "daily", "aqi", "indices"]
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                logger.error(f"{api_names[i]} API 请求异常: {result}")
+            elif result is None:
+                logger.error(f"{api_names[i]} API 返回 None")
+            else:
+                logger.info(f"{api_names[i]} API 请求成功")
+        
+        if now_data is None or daily_data is None:
+            logger.error("获取天气数据失败（now 或 daily 为 None）")
             return None
 
         # 3. 整合数据
