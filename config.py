@@ -16,7 +16,7 @@ class PluginConfig:
     def _load_config(self):
         """加载配置文件"""
         defaults = self._load_defaults()
-        user_config = self._load_user_config()  # ✅ 关键：在这里定义 user_config
+        user_config = self._load_user_config()
 
         # 和风天气配置
         self.qweather_key = user_config.get("qweather_key") or defaults.get("qweather_key", "")
