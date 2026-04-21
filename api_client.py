@@ -10,9 +10,15 @@ class QWeatherClient:
     """和风天气 API 客户端（使用本地 CSV 城市列表 + GeoAPI 降级）"""
 
     def __init__(self, api_key: str, api_host: str = "", plugin_dir: str = ""):
+        # 打印原始接收值，便于调试
+        logger.info(f"QWeatherClient 初始化接收: api_key={'已设置' if api_key else '未设置'}, api_host='{api_host}', plugin_dir='{plugin_dir}'")
+
         self.api_key = api_key
-        # 清洗 API Host：移除可能误输入的 https:// 前缀和尾部斜杠
-        self.api_host = api_host.replace("https://", "").replace("http://", "").rstrip('/')
+        # 清洗 API Host：移除可能误输入的 https:// 前缀和尾部斜杠，并去除空格
+        raw_host = api_host.strip() if api_host else ""
+        self.api_host = raw_host.replace("https://", "").replace("http://", "").rstrip('/')
+        logger.info(f"清洗后 api_host: '{self.api_host}'")
+
         self.plugin_dir = plugin_dir
         self._city_id_map = {}
         self._load_city_list()
@@ -70,7 +76,6 @@ class QWeatherClient:
             "User-Agent": "AstrBot-Weather-Plugin/2.0"
         }
 
-        # 打印请求 URL（隐藏敏感 Key）
         logger.debug(f"发起请求: {url}?{aiohttp.helpers.build_query(params)}")
 
         try:
