@@ -5,26 +5,35 @@ from astrbot.api import logger
 
 
 class QWeatherClient:
-    """和风天气 API 客户端"""
+    """和风天气 API 客户端 (支持 API Host)"""
 
-    # 和风天气 API 端点 (注意区分 GeoAPI 和 devapi)
-    GEO_URL = "https://jy67cf8d4f.re.qweatherapi.com/v2/city/lookup"
-    WEATHER_NOW_URL = "https://devapi.qweather.com/v7/weather/now"
-    WEATHER_DAILY_URL = "https://devapi.qweather.com/v7/weather/7d"
-    AIR_QUALITY_URL = "https://devapi.qweather.com/v7/air/now"
-    INDICES_URL = "https://devapi.qweather.com/v7/indices/1d"
+    def __init__(self, api_key: str, api_host: str = ""):
+        self.api_key = api_key
+        self.api_host = api_host.rstrip('/')
+        self._build_endpoints()
+
+    def _build_endpoints(self):
+        """根据 API Host 动态构建完整的端点 URL"""
+        if self.api_host:
+            self.GEO_URL = f"https://{self.api_host}/geo/v2/city/lookup"
+            self.WEATHER_NOW_URL = f"https://{self.api_host}/v7/weather/now"
+            self.WEATHER_DAILY_URL = f"https://{self.api_host}/v7/weather/7d"
+            self.AIR_QUALITY_URL = f"https://{self.api_host}/v7/air/now"
+            self.INDICES_URL = f"https://{self.api_host}/v7/indices/1d"
+        else:
+            # 降级：如果未配置 API Host，则使用开发环境共享地址（不建议用于生产）
+            logger.warning("未配置 API Host，将使用开发环境共享地址，可能影响稳定性。")
+            self.GEO_URL = "https://devapi.qweather.com/geo/v2/city/lookup"
+            self.WEATHER_NOW_URL = "https://devapi.qweather.com/v7/weather/now"
+            self.WEATHER_DAILY_URL = "https://devapi.qweather.com/v7/weather/7d"
+            self.AIR_QUALITY_URL = "https://devapi.qweather.com/v7/air/now"
+            self.INDICES_URL = "https://devapi.qweather.com/v7/indices/1d"
 
     # 需要的生活指数类型 ID (按用户需求)
-    INDICES_TYPES = "1,2,5,6,7,8,10,12,13,14"  # 运动、穿衣、紫外线、旅游、感冒、空气污染扩散、空调开启、晾晒、交通、防晒
-
-    def __init__(self, api_key: str):
-        self.api_key = api_key
+    INDICES_TYPES = "1,2,5,6,7,8,10,12,13,14"
 
     async def get_location_id(self, city_name: str) -> Optional[Tuple[str, str]]:
-        """
-        通过城市名获取 Location ID 和显示名称
-        返回: (location_id, display_name) 或 None
-        """
+        """通过城市名获取 Location ID 和显示名称"""
         params = {
             "location": city_name,
             "key": self.api_key,
@@ -154,9 +163,7 @@ class QWeatherClient:
             return None
 
     async def get_complete_weather(self, city: str) -> Optional[Dict[str, Any]]:
-        """
-        获取完整的天气数据，整合多个 API 返回
-        """
+        """获取完整的天气数据，整合多个 API 返回"""
         # 1. 获取 Location ID
         loc_result = await self.get_location_id(city)
         if not loc_result:
