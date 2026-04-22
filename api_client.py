@@ -1,307 +1,263 @@
-import io
+# api_client.py (修改后完整内容)
+import aiohttp
+import asyncio
+import csv
 import os
-import platform
-from datetime import datetime
-from PIL import Image, ImageDraw, ImageFont
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Optional, Tuple, Dict, Any
 from astrbot.api import logger
 
 
-class WeatherImageGenerator:
-    """天气图片生成器 - 左右分栏布局，动态昼夜配色"""
+class QWeatherClient:
+    """和风天气 API 客户端（支持 TomTom 格式自动转换）"""
 
-    DEFAULT_ICON_CODE = "100"
+    def __init__(self, api_key: str, api_host: str = "", plugin_dir: str = ""):
+        self.api_key = api_key
+        raw_host = api_host.strip() if api_host else ""
+        self.api_host = raw_host.replace("https://", "").replace("http://", "").rstrip('/')
+        self.plugin_dir = plugin_dir
+        self._city_id_map = {}
+        self._load_city_list()
+        self._build_endpoints()
 
-    def __init__(self):
-        self.font_search_paths = self._build_font_paths()
-        self.font_path = self._find_chinese_font()
-        if not self.font_path:
-            logger.warning("未找到任何中文字体，中文可能显示异常。")
-        else:
-            logger.info(f"已加载中文字体：{self.font_path}")
+    def _load_city_list(self):
+        csv_path = os.path.join(self.plugin_dir, "China-City-List-latest.csv")
+        if not os.path.exists(csv_path):
+            logger.warning(f"城市列表文件不存在: {csv_path}，将仅依赖 GeoAPI 查询")
+            return
+        try:
+            with open(csv_path, "r", encoding="utf-8") as f:
+                reader = csv.reader(f)
+                next(reader, None)
+                for row in reader:
+                    if len(row) >= 3:
+                        loc_id = row[0].strip()
+                        city_zh = row[2].strip()
+                        if loc_id and city_zh:
+                            self._city_id_map[city_zh] = loc_id
+            logger.info(f"已加载 {len(self._city_id_map)} 个城市 Location ID 映射")
+        except Exception as e:
+            logger.error(f"加载城市列表失败: {e}")
 
-        # 预加载常用字号
-        self.font_temp_main = self._load_font(68)
-        self.font_temp_feels = self._load_font(24)
-        self.font_city = self._load_font(32)
-        self.font_date = self._load_font(18)
-        self.font_weather = self._load_font(22)
-        self.font_label = self._load_font(18)
-        self.font_value = self._load_font(18)
-        self.font_moon = self._load_font(18)
+    def _build_endpoints(self):
+        if not self.api_host:
+            logger.error("未配置 API Host，请使用 /weather_config api_host 进行配置。")
+            self.GEO_URL = ""
+            self.WEATHER_NOW_URL = ""
+            self.WEATHER_DAILY_URL = ""
+            self.AIR_DAILY_URL = ""
+            self.INDICES_URL = ""
+            return
+        self.GEO_URL = f"https://{self.api_host}/geo/v2/city/lookup"
+        self.WEATHER_NOW_URL = f"https://{self.api_host}/v7/weather/now"
+        self.WEATHER_DAILY_URL = f"https://{self.api_host}/v7/weather/3d"
+        self.AIR_DAILY_URL = f"https://{self.api_host}/airquality/v1/daily/"
+        self.INDICES_URL = f"https://{self.api_host}/v7/indices/1d"
+        logger.info(f"API 端点已构建，使用 Host: {self.api_host}")
 
-        # 图标目录
-        self.icon_dir = os.path.expanduser("~/icons")
-        if not os.path.exists(self.icon_dir):
-            logger.warning(f"图标目录不存在: {self.icon_dir}，图标将无法显示")
+    INDICES_TYPES = "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16"
 
-    # ---------- 字体查找与加载 ----------
-    def _build_font_paths(self) -> List[str]:
-        paths = []
-        system = platform.system()
-        if system == "Linux":
-            paths.extend([
-                "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
-                "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
-                "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-                "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
-                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-                os.path.expanduser("~/.fonts/wqy-microhei.ttf"),
-            ])
-        elif system == "Windows":
-            windir = os.environ.get("WINDIR", "C:\\Windows")
-            paths.extend([
-                os.path.join(windir, "Fonts", "msyh.ttc"),
-                os.path.join(windir, "Fonts", "simhei.ttf"),
-                os.path.join(windir, "Fonts", "simsun.ttc"),
-            ])
-        elif system == "Darwin":
-            paths.extend([
-                "/System/Library/Fonts/PingFang.ttc",
-                "/System/Library/Fonts/STHeiti Light.ttc",
-                "/Library/Fonts/Arial Unicode MS.ttf",
-            ])
-        env_font = os.environ.get("ASTRBOT_CHINESE_FONT_PATH")
-        if env_font:
-            paths.insert(0, env_font)
-        return [p for p in paths if p]
-
-    def _find_chinese_font(self) -> Optional[str]:
-        for path in self.font_search_paths:
-            if os.path.exists(path):
-                try:
-                    ImageFont.truetype(path, 12).getmask("中")
-                    return path
-                except:
-                    continue
-        return None
-
-    def _load_font(self, size: int) -> ImageFont.FreeTypeFont:
-        if self.font_path:
-            try:
-                return ImageFont.truetype(self.font_path, size)
-            except:
-                pass
-        return ImageFont.load_default()
-
-    # ---------- 辅助函数 ----------
-    def _wind_direction(self, deg: int) -> str:
-        dirs = ["北", "东北", "东", "东南", "南", "西南", "西", "西北"]
-        return dirs[round(deg / 45) % 8]
-
-    # ---------- 增强的昼夜判断 ----------
-    def _is_daytime(self, weather_data: Dict[str, Any]) -> bool:
-        """
-        判断当前是否为白天
-        优先使用日出/日落时间（如果有），否则根据图标代码
-        同时结合云量阈值：白天且云量<70 返回 True，否则返回 False
-        """
-        # 获取云量
-        cloud = weather_data.get("cloud", 0)
-        # 尝试使用日出日落判断
-        dt = weather_data.get("dt")
-        sys = weather_data.get("sys", {})
-        sunrise = sys.get("sunrise")
-        sunset = sys.get("sunset")
-        is_day_by_time = False
-        if dt and sunrise and sunset:
-            is_day_by_time = sunrise <= dt <= sunset
-        else:
-            icon = weather_data.get("icon", "")
-            is_day_by_time = icon.endswith("d")
-        # 最终结果：白天且云量<70
-        return is_day_by_time and cloud < 70
-
-    # ---------- 图标加载（详细日志）----------
-    def _load_icon(self, icon_code: str, size: int = 100) -> Optional[Image.Image]:
-        """加载图标，返回 PIL Image，失败返回 None 并输出详细日志"""
-        if not icon_code:
-            logger.debug(f"图标代码为空，跳过加载")
+    async def _request(self, url: str, params: dict) -> Optional[Dict[str, Any]]:
+        """统一请求，自动兼容和风标准格式与 TomTom 格式"""
+        if not url:
+            logger.error("请求 URL 为空，请检查 API Host 配置")
             return None
 
-        # 构建可能的路径
-        svg_path = os.path.join(self.icon_dir, f"{icon_code}.svg")
-        png_path = os.path.join(self.icon_dir, f"{icon_code}.png")
-        
-        logger.debug(f"尝试加载图标: {icon_code}, 搜索路径: SVG={svg_path}, PNG={png_path}")
-        
-        icon_path = None
-        if os.path.exists(svg_path):
-            icon_path = svg_path
-            logger.debug(f"找到 SVG 图标: {svg_path}")
-        elif os.path.exists(png_path):
-            icon_path = png_path
-            logger.debug(f"找到 PNG 图标: {png_path}")
-        else:
-            logger.warning(f"图标文件不存在: 未找到 {icon_code}.svg 或 {icon_code}.png 在目录 {self.icon_dir}")
-            return None
+        headers = {
+            "X-QW-Api-Key": self.api_key,
+            "User-Agent": "AstrBot-Weather-Plugin/2.0"
+        }
 
         try:
-            ext = os.path.splitext(icon_path)[1].lower()
-            if ext == '.svg':
-                try:
-                    import cairosvg
-                    png_bytes = cairosvg.svg2png(url=icon_path, output_width=size, output_height=size)
-                    icon = Image.open(io.BytesIO(png_bytes))
-                    logger.debug(f"成功加载 SVG 图标: {icon_path}")
-                except ImportError:
-                    logger.error("cairosvg 未安装，无法加载 SVG 图标。请执行: pip install cairosvg")
-                    return None
-                except Exception as e:
-                    logger.error(f"SVG 转换失败 {icon_path}: {e}")
-                    return None
-            else:
-                icon = Image.open(icon_path)
-                icon = icon.resize((size, size), Image.Resampling.LANCZOS)
-                logger.debug(f"成功加载 PNG 图标: {icon_path}")
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, params=params, headers=headers) as resp:
+                    if resp.status != 200:
+                        error_text = await resp.text()
+                        logger.error(f"API 请求失败: {url} 状态码: {resp.status}, 响应: {error_text[:300]}")
+                        return None
+                    data = await resp.json()
 
-            if icon.mode != 'RGBA':
-                icon = icon.convert('RGBA')
-            return icon
+                    # 标准和风天气格式
+                    if "code" in data:
+                        if data.get("code") != "200":
+                            logger.error(f"API 返回业务错误: {data}")
+                            return None
+                        return data
+
+                    # TomTom 空气质素预报格式 (无 code，有 days)
+                    if "days" in data:
+                        logger.info("检测到 TomTom 格式响应，自动包装为和风兼容格式")
+                        # 包装成和风标准结构
+                        wrapped = {
+                            "code": "200",
+                            "updateTime": data.get("metadata", {}).get("tag", ""),
+                            "tomtom_original": data  # 保留原始数据
+                        }
+                        return wrapped
+
+                    # 其他未知格式
+                    logger.warning(f"未知 API 响应格式，字段: {list(data.keys())}")
+                    return data
         except Exception as e:
-            logger.error(f"加载图标异常 {icon_code}: {e}", exc_info=True)
+            logger.error(f"API 请求异常: {e}", exc_info=True)
             return None
 
-    # ---------- 核心绘图 ----------
-    def generate(self, weather_data: Dict[str, Any]) -> bytes:
-        width, height = 800, 480
-        img = Image.new("RGB", (width, height), color=(255, 255, 255))
-        draw = ImageDraw.Draw(img)
+    async def _get_location_id_from_geoapi(self, city_name: str) -> Optional[Tuple[str, str]]:
+        if not self.GEO_URL:
+            return None
+        params = {"location": city_name, "number": 1}
+        data = await self._request(self.GEO_URL, params)
+        if not data:
+            return None
+        locations = data.get("location", [])
+        if not locations:
+            logger.warning(f"GeoAPI 未找到城市: {city_name}")
+            return None
+        loc = locations[0]
+        return (loc.get("id"), loc.get("name", city_name))
 
-        # 判断白天模式（白天且云量<70）
-        is_day_mode = self._is_daytime(weather_data)
-        
-        # 根据模式设定左右背景色、字体颜色、分割线颜色
-        if is_day_mode:
-            left_bg = (255, 217, 130)   # #FFD982
-            right_bg = (94, 206, 246)   # #5ECEF6
-            text_main = (0, 0, 0)       # 黑色
-            text_secondary = (80, 80, 80)
-            line_color = (191, 162, 97) # #BFA261
-        else:
-            left_bg = (37, 57, 92)      # #25395C
-            right_bg = (28, 42, 79)     # #1C2A4F
-            text_main = (255, 255, 255) # 白色
-            text_secondary = (200, 200, 200)
-            line_color = (92, 107, 133) # #5C6B85
+    async def _get_lat_lon_from_geoapi(self, city_name: str) -> Tuple[Optional[float], Optional[float]]:
+        if not self.GEO_URL:
+            return None, None
+        params = {"location": city_name, "number": 1}
+        data = await self._request(self.GEO_URL, params)
+        if not data:
+            return None, None
+        locations = data.get("location", [])
+        if not locations:
+            logger.warning(f"GeoAPI 未找到城市经纬度: {city_name}")
+            return None, None
+        loc = locations[0]
+        lat = loc.get("lat")
+        lon = loc.get("lon")
+        if lat and lon:
+            try:
+                return float(lat), float(lon)
+            except ValueError:
+                return None, None
+        return None, None
 
-        # 绘制左右背景
-        right_width = width // 4
-        left_width = width - right_width
-        right_x_start = left_width
-        
-        draw.rectangle([(0, 0), (left_width, height)], fill=left_bg)
-        draw.rectangle([(right_x_start, 0), (width, height)], fill=right_bg)
+    async def get_location_id(self, city_name: str) -> Optional[Tuple[str, str]]:
+        loc_id = self._city_id_map.get(city_name)
+        if loc_id:
+            logger.info(f"从本地 CSV 匹配到 LocationID: {city_name} -> {loc_id}")
+            return (loc_id, city_name)
+        if city_name.endswith("市"):
+            city_without_suffix = city_name[:-1]
+            loc_id = self._city_id_map.get(city_without_suffix)
+            if loc_id:
+                logger.info(f"从本地 CSV 模糊匹配到 LocationID: {city_name} -> {loc_id}")
+                return (loc_id, city_name)
+        logger.info(f"本地 CSV 未匹配到 {city_name}，尝试 GeoAPI 查询")
+        return await self._get_location_id_from_geoapi(city_name)
 
-        # 右侧分隔线
-        draw.line([(right_x_start, 0), (right_x_start, height)], fill=line_color, width=2)
+    async def get_weather_now(self, location_id: str) -> Optional[Dict[str, Any]]:
+        return await self._request(self.WEATHER_NOW_URL, {"location": location_id})
 
-        # 右侧：大图标
-        icon_code = weather_data.get("icon", "100")
-        icon_size = 160
-        icon = self._load_icon(icon_code, size=icon_size)
-        if icon:
-            icon_x = right_x_start + (right_width - icon_size) // 2
-            icon_y = (height - icon_size) // 2
-            img.paste(icon, (icon_x, icon_y), icon)
-        else:
-            logger.warning(f"无法加载右侧大图标: {icon_code}，右侧将留空")
+    async def get_weather_daily(self, location_id: str) -> Optional[Dict[str, Any]]:
+        return await self._request(self.WEATHER_DAILY_URL, {"location": location_id})
 
-        # 左侧布局
-        left_padding = 25
+    async def get_air_daily_forecast(self, lat: float, lon: float) -> Optional[Dict[str, Any]]:
+        url = f"{self.AIR_DAILY_URL}/{lat:.2f}/{lon:.2f}"
+        return await self._request(url, {})
 
-        # ----- 第1部分：城市、日期 -----
-        city = weather_data.get("city", "未知")
-        draw.text((left_padding, 20), city, fill=text_main, font=self.font_city)
+    async def get_indices(self, location_id: str) -> Optional[Dict[str, Any]]:
+        return await self._request(self.INDICES_URL, {"location": location_id, "type": self.INDICES_TYPES})
 
-        now = datetime.now()
-        date_str = now.strftime("%Y年%m月%d日 %H:%M")
-        draw.text((left_padding, 58), date_str, fill=text_secondary, font=self.font_date)
+    async def get_complete_weather(self, city: str) -> Optional[Dict[str, Any]]:
+        logger.info(f"开始查询天气: {city}")
 
-        draw.line([(left_padding, 90), (left_width - left_padding, 90)], fill=line_color, width=1)
+        loc_result = await self.get_location_id(city)
+        if not loc_result:
+            logger.error(f"获取 LocationID 失败: {city}")
+            return None
+        location_id, display_name = loc_result
+        logger.info(f"使用 LocationID: {location_id}, 显示名称: {display_name}")
 
-        # ----- 第2部分：温度区域 -----
-        temp_y_start = 110
-        temp = weather_data.get("temperature", 0)
-        temp_str = f"{temp:.0f}°" if temp == int(temp) else f"{temp:.1f}°"
-        draw.text((left_padding, temp_y_start), temp_str, fill=text_main, font=self.font_temp_main)
+        lat, lon = await self._get_lat_lon_from_geoapi(city)
+        if lat is None or lon is None:
+            logger.error(f"获取经纬度失败: {city}")
+            return None
+        logger.info(f"获取到经纬度: lat={lat:.2f}, lon={lon:.2f}")
 
-        feels = weather_data.get("feels_like", 0)
-        feels_str = f"体感 {feels:.0f}°" if feels == int(feels) else f"体感 {feels:.1f}°"
-        feels_x = left_padding + 130
-        draw.text((feels_x, temp_y_start + 28), feels_str, fill=text_secondary, font=self.font_temp_feels)
+        try:
+            now_data, daily_data, aqi_data, indices_data = await asyncio.gather(
+                self.get_weather_now(location_id),
+                self.get_weather_daily(location_id),
+                self.get_air_daily_forecast(lat, lon),
+                self.get_indices(location_id),
+                return_exceptions=True
+            )
+        except Exception as e:
+            logger.error(f"并发请求 API 异常: {e}", exc_info=True)
+            return None
 
-        temp_max = weather_data.get("temp_max", 0)
-        temp_min = weather_data.get("temp_min", 0)
-        range_text = f"↑{temp_max:.0f}°  ↓{temp_min:.0f}°"
-        draw.text((left_padding, temp_y_start + 85), range_text, fill=text_secondary, font=self.font_label)
+        # 检查关键数据
+        if isinstance(now_data, Exception) or now_data is None:
+            logger.error("now API 数据无效")
+            return None
+        if isinstance(daily_data, Exception) or daily_data is None:
+            logger.error("daily API 数据无效")
+            return None
 
-        weather_text = weather_data.get("weather", "未知")
-        small_icon = self._load_icon(icon_code, size=40)
-        if small_icon:
-            img.paste(small_icon, (left_padding, temp_y_start + 120), small_icon)
-        draw.text((left_padding + 50, temp_y_start + 128), weather_text, fill=text_main, font=self.font_weather)
+        now = now_data.get("now", {})
+        daily_list = daily_data.get("daily", [])
+        today = daily_list[0] if daily_list else {}
 
-        line_y = temp_y_start + 175
-        draw.line([(left_padding, line_y), (left_width - left_padding, line_y)], fill=line_color, width=1)
+        # ---------- 空气质量解析：兼容 TomTom (cn-mee) 和和风 (qaqi) ----------
+        aqi_value = ""
+        aqi_category = ""
+        if aqi_data and not isinstance(aqi_data, Exception):
+            # 检查是否为 TomTom 格式（包装后的数据中有 tomtom_original）
+            tomtom_original = aqi_data.get("tomtom_original")
+            if tomtom_original and "days" in tomtom_original:
+                # TomTom 格式：取第一个 days 的 indexes 中 code 为 "cn-mee" 的条目
+                days_list = tomtom_original.get("days", [])
+                if days_list:
+                    indexes = days_list[0].get("indexes", [])
+                    for idx in indexes:
+                        if idx.get("code") == "cn-mee":
+                            aqi_value = str(idx.get("aqi", ""))
+                            aqi_category = idx.get("category", "")
+                            break
+            else:
+                # 和风标准格式：查找 indexes 中 code 为 "qaqi"
+                daily_air = aqi_data.get("daily", [])
+                if daily_air:
+                    indexes = daily_air[0].get("indexes", [])
+                    for idx in indexes:
+                        if idx.get("code") == "qaqi":
+                            aqi_value = str(idx.get("aqi", ""))
+                            aqi_category = idx.get("category", "")
+                            break
 
-        # ----- 第3部分：两列信息 -----
-        info_y_start = line_y + 20
-        line_gap = 30
+        result = {
+            "city": display_name,
+            "temperature": float(now.get("temp", 0)),
+            "feels_like": float(now.get("feelsLike", 0)),
+            "humidity": int(now.get("humidity", 0)),
+            "pressure": int(now.get("pressure", 0)),
+            "wind_speed": float(now.get("windSpeed", 0)),
+            "wind_deg": int(now.get("wind360", 0)),
+            "wind_dir": now.get("windDir", ""),
+            "vis": float(now.get("vis", 0)),
+            "cloud": int(now.get("cloud", 0)),
+            "icon": now.get("icon", "100"),
+            "weather": now.get("text", ""),
+            "update_time": now_data.get("updateTime", ""),
+            "temp_max": float(today.get("tempMax", 0)),
+            "temp_min": float(today.get("tempMin", 0)),
+            "sunrise": today.get("sunrise", ""),
+            "sunset": today.get("sunset", ""),
+            "moonrise": today.get("moonrise", ""),
+            "moonset": today.get("moonset", ""),
+            "moon_phase": today.get("moonPhase", ""),
+            "moon_icon": today.get("moonPhase", {}).get("icon", "") if isinstance(today.get("moonPhase"), dict) else "",
+            "uv_index": today.get("uvIndex", 0),
+            "aqi": aqi_value,
+            "aqi_category": aqi_category,
+            "indices": indices_data.get("daily", []) if indices_data and not isinstance(indices_data, Exception) else [],
+            "raw_daily": daily_list,
+            "raw_now": now_data,
+        }
 
-        wind_dir = weather_data.get("wind_dir", "")
-        wind_speed = weather_data.get("wind_speed", 0)
-        wind_deg = weather_data.get("wind_deg", 0)
-        if not wind_dir and wind_deg:
-            wind_dir = self._wind_direction(wind_deg)
-
-        humidity = weather_data.get("humidity", 0)
-        cloud = weather_data.get("cloud", 0)
-        uv = weather_data.get("uv_index", 0)
-        precip = weather_data.get("precip", 0)
-        aqi = weather_data.get("aqi", "")
-        aqi_category = weather_data.get("aqi_category", "")
-        sunrise = weather_data.get("sunrise", "")
-        sunset = weather_data.get("sunset", "")
-        moon_phase = weather_data.get("moon_phase", "")
-        moon_icon_code = weather_data.get("moon_icon", "")
-
-        left_col_items = [
-            ("风力", f"{wind_speed:.0f} km/h ({wind_dir})" if wind_dir else f"{wind_speed:.0f} km/h"),
-            ("湿度", f"{humidity}%"),
-            ("云量", f"{cloud}%"),
-            ("紫外线", str(uv)),
-            ("降水量", f"{precip} mm"),
-            ("AQI", f"{aqi} {aqi_category}" if aqi else "无数据"),
-        ]
-
-        right_col_items = [
-            ("日出", sunrise if sunrise else "--:--"),
-            ("日落", sunset if sunset else "--:--"),
-        ]
-
-        left_col_x = left_padding
-        for i, (label, value) in enumerate(left_col_items):
-            y = info_y_start + i * line_gap
-            draw.text((left_col_x, y), f"{label}:", fill=text_main, font=self.font_label)
-            draw.text((left_col_x + 70, y), value, fill=text_main, font=self.font_value)
-
-        right_col_x = left_padding + 250
-        for i, (label, value) in enumerate(right_col_items):
-            y = info_y_start + i * line_gap
-            draw.text((right_col_x, y), f"{label}:", fill=text_main, font=self.font_label)
-            draw.text((right_col_x + 55, y), value, fill=text_main, font=self.font_value)
-
-        if moon_phase:
-            moon_text_y = info_y_start + 2 * line_gap + 8
-            draw.text((right_col_x, moon_text_y), f"月相: {moon_phase}", fill=text_main, font=self.font_moon)
-            if moon_icon_code:
-                moon_icon = self._load_icon(moon_icon_code, size=32)
-                if moon_icon:
-                    img.paste(moon_icon, (right_col_x + 80, moon_text_y - 6), moon_icon)
-
-        # 转换为 bytes
-        img_bytes = io.BytesIO()
-        img.save(img_bytes, format="PNG")
-        img_bytes.seek(0)
-        return img_bytes.getvalue()
+        return result
