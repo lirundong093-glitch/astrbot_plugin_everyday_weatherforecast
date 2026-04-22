@@ -108,25 +108,17 @@ class WeatherImageGenerator:
 
     # ---------- 图标加载 ----------
     def _get_icon_path(self, icon_code: str) -> str:
-        """获取图标文件路径（优先 PNG，其次 SVG）"""
+        """获取图标文件路径，优先 SVG，其次 PNG。"""
         if not icon_code:
-            icon_code = "100"
-        # 优先 PNG
-        png_path = os.path.join(self.icon_dir, f"{icon_code}.png")
-        if os.path.exists(png_path):
-            return png_path
-        # 其次 SVG（需要 cairosvg 支持）
-        svg_path = os.path.join(self.icon_dir, f"{icon_code}.svg")
-        if os.path.exists(svg_path):
-            return svg_path
-        # 默认图标
-        default_png = os.path.join(self.icon_dir, "100.png")
-        if os.path.exists(default_png):
-            return default_png
+            icon_code = "100"  # 默认晴天图标
+        # 图标统一存放在项目根目录的 /icons/ 下，您可以根据自己的部署位置调整
+        icon_file = os.path.join("/icons", f"{icon_code}.svg")
+        if os.path.exists(icon_file):
+            return icon_file
         return ""
 
     def _load_icon(self, icon_code: str, size: int = 110) -> Optional[Image.Image]:
-        """加载并缩放图标（支持 SVG 自动转 PNG）"""
+        """加载并缩放图标（支持 SVG 和 PNG）。"""
         icon_path = self._get_icon_path(icon_code)
         if not icon_path:
             logger.warning(f"图标文件不存在: {icon_code}")
@@ -134,25 +126,23 @@ class WeatherImageGenerator:
 
         try:
             ext = os.path.splitext(icon_path)[1].lower()
-            if ext == '.svg':
-                try:
-                    import cairosvg
-                    png_bytes = cairosvg.svg2png(url=icon_path, output_width=size, output_height=size)
-                    icon = Image.open(io.BytesIO(png_bytes))
-                except ImportError:
-                    logger.error("cairosvg 未安装，无法加载 SVG 图标")
-                    return None
-            else:
-                icon = Image.open(icon_path)
-                icon = icon.resize((size, size), Image.Resampling.LANCZOS)
-            
+            try:
+                import cairosvg
+                # 将 SVG 转换为 PNG 字节流
+                png_bytes = cairosvg.svg2png(url=icon_path, output_width=size, output_height=size)
+                icon = Image.open(io.BytesIO(png_bytes))
+            except ImportError:
+                logger.error("cairosvg 未安装，无法加载 SVG 图标。请执行: pip install cairosvg")
+                return None
+        
+            # 确保图标为 RGBA 模式，以支持透明背景
             if icon.mode != 'RGBA':
                 icon = icon.convert('RGBA')
             return icon
         except Exception as e:
             logger.error(f"加载图标失败 {icon_code}: {e}")
             return None
-
+        
     # ---------- 核心绘图 ----------
     def generate(self, weather_data: Dict[str, Any]) -> bytes:
         width, height = 800, 420
@@ -265,10 +255,10 @@ class WeatherImageGenerator:
         # ---------- 月相图标 (主图标下方) ----------
         moon_icon_code = weather_data.get("moon_icon", "")
         if moon_icon_code:
-            moon_icon = self._load_icon(moon_icon_code, size=50)
+            moon_icon = self._load_icon(moon_icon_code, size=45)  # 月相图标尺寸稍小
             if moon_icon:
-                moon_x = width - 100
-                moon_y = 155
+                moon_x = left_x  # 与体感温度文字左对齐
+                moon_y = 265     # 定位在体感温度下方 (原体感温度 Y 坐标为 230)
                 img.paste(moon_icon, (moon_x, moon_y), moon_icon)
             else:
                 logger.warning(f"无法加载月相图标: {moon_icon_code}")
