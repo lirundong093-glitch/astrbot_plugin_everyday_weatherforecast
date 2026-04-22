@@ -289,16 +289,22 @@ class WeatherImageGenerator:
             # 月相图标放在文字下方，距离为 line_gap 的一半（避免过于拥挤），图标大小 32x32
             if moon_icon_code:
                 moon_icon = self._load_icon(moon_icon_code, 32, icon_color, context="月相图标")
-                if moon_icon:
-                    # 图标放在文字下方，垂直偏移 24px（约 line_gap 的 0.8 倍）
-                    icon_y = moon_text_y + 24
-                    img.paste(moon_icon, (right_col_x, icon_y), moon_icon)
+                if moon_icon_code:
+                    # 图标大小 = 2 * line_gap（两行字宽）
+                    icon_size = 2 * line_gap   # 60px
+                    moon_icon = self._load_icon(moon_icon_code, icon_size, icon_color, context="月相图标")
+                    if moon_icon:
+                        # 计算文字行的中间 Y 坐标
+                        # 获取文字边界框
+                        bbox = draw.textbbox((right_col_x, moon_text_y), f"月相: {moon_phase}", font=self.font_moon)
+                        text_center_y = (bbox[1] + bbox[3]) / 2   # top + bottom 的一半
+                        # 图标放置位置：文字下方 2*line_gap 间距，且图标的垂直中心与文字行中心对齐
+                        icon_y = text_center_y + 2 * line_gap - icon_size / 2
+                        img.paste(moon_icon, (right_col_x, int(icon_y)), moon_icon)
+                    else:
+                        logger.warning(f"月相图标加载失败: {moon_icon_code}")
                 else:
-                    logger.warning(f"月相图标加载失败: {moon_icon_code}")
-            else:
-                logger.debug("月相图标代码为空，不显示月相图标")
-        else:
-            logger.debug("无月相数据，跳过月相绘制")
+                    logger.info("月相图标代码为空，不显示月相图标")
 
         # 转换为 bytes
         img_bytes = io.BytesIO()
