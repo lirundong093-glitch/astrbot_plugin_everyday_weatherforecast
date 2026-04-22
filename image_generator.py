@@ -122,16 +122,12 @@ class WeatherImageGenerator:
             return None
 
         try:
-            # 读取 SVG 内容
             with open(svg_path, 'r', encoding='utf-8') as f:
                 svg_content = f.read()
 
-            # 使用 xml.etree.ElementTree 解析并修改 fill 属性
-            # 注册 SVG 命名空间
             ET.register_namespace('', "http://www.w3.org/2000/svg")
-            # 解析
             root = ET.fromstring(svg_content)
-            # 递归修改所有元素的 fill 属性
+            
             def set_fill(element, color):
                 if 'fill' in element.attrib:
                     element.set('fill', color)
@@ -139,10 +135,7 @@ class WeatherImageGenerator:
                     set_fill(child, color)
             set_fill(root, color_hex)
 
-            # 转换为字符串
             modified_svg = ET.tostring(root, encoding='unicode')
-            
-            # 使用 cairosvg 转为 PNG
             import cairosvg
             png_bytes = cairosvg.svg2png(bytestring=modified_svg.encode('utf-8'),
                                          output_width=size, output_height=size)
@@ -270,6 +263,7 @@ class WeatherImageGenerator:
             ("AQI", f"{aqi} {aqi_category}" if aqi else "无数据"),
         ]
 
+        # 右列信息（仅日出日落）
         right_col_items = [
             ("日出", sunrise if sunrise else "--:--"),
             ("日落", sunset if sunset else "--:--"),
@@ -287,13 +281,16 @@ class WeatherImageGenerator:
             draw.text((right_col_x, y), f"{label}:", fill=text_main, font=self.font_label)
             draw.text((right_col_x + 55, y), value, fill=text_main, font=self.font_value)
 
+        # 月相：位于日落下方，间距为 line_gap
         if moon_phase:
-            moon_text_y = info_y_start + 2 * line_gap + 8
+            moon_text_y = info_y_start + 2 * line_gap  # 日落后的下一行
             draw.text((right_col_x, moon_text_y), f"月相: {moon_phase}", fill=text_main, font=self.font_moon)
+            # 月相图标放在文字下方，大小约两行字高 (32x32)
             if moon_icon_code:
                 moon_icon = self._load_icon(moon_icon_code, 32, icon_color)
                 if moon_icon:
-                    img.paste(moon_icon, (right_col_x + 80, moon_text_y - 6), moon_icon)
+                    icon_y = moon_text_y + 24  # 文字高度估算，留出间距
+                    img.paste(moon_icon, (right_col_x, icon_y), moon_icon)
 
         # 转换为 bytes
         img_bytes = io.BytesIO()
