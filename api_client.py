@@ -218,7 +218,7 @@ class QWeatherClient:
             "moon_phase": today.get("moonPhase", ""),
             "moon_icon": today.get("moonPhase", {}).get("icon", "") if isinstance(today.get("moonPhase"), dict) else "",
             "uv_index": today.get("uvIndex", 0),
-            "aqi": str(next((item.get("aqi", "") for item in aqi_data.get("days", [{}])[0].get("indexes", []) if item.get("code") == "qaqi"), "")) if aqi_data and not isinstance(aqi_data, Exception) else "",
+            "aqi": float(next((item.get("aqi", "") for item in aqi_data.get("days", [{}])[0].get("indexes", []) if item.get("code") == "qaqi"), "")) if aqi_data and not isinstance(aqi_data, Exception) else "",
             "aqi_category": next((item.get("category", "") for item in aqi_data.get("days", [{}])[0].get("indexes", []) if item.get("code") == "qaqi"), "") if aqi_data and not isinstance(aqi_data, Exception) else "",
             "indices": indices_data.get("daily", []) if indices_data and not isinstance(indices_data, Exception) else [],
             "raw_daily": daily_list,
