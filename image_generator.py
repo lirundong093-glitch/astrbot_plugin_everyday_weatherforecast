@@ -155,6 +155,31 @@ class WeatherImageGenerator:
             logger.error(f"{context} 加载 SVG 图标失败 {icon_code}: {e}", exc_info=True)
             return None
 
+    def _load_raw_icon(self, icon_code: str, size: int, context: str = "") -> Optional[Image.Image]:
+        """加载 SVG 图标，保持原始颜色（不动态改色）"""
+        if not icon_code:
+            return None
+        svg_path = os.path.join(self.icon_dir, f"{icon_code}.svg")
+        if not os.path.exists(svg_path):
+            logger.warning(f"{context} SVG 图标不存在: {svg_path}")
+            return None
+        try:
+            import cairosvg
+            with open(svg_path, 'r', encoding='utf-8') as f:
+                svg_content = f.read()
+            png_bytes = cairosvg.svg2png(bytestring=svg_content.encode('utf-8'),
+                                         output_width=size, output_height=size)
+            icon = Image.open(io.BytesIO(png_bytes))
+            if icon.mode != 'RGBA':
+                icon = icon.convert('RGBA')
+            return icon
+        except ImportError:
+            logger.error(f"{context} cairosvg 未安装，请执行: pip install cairosvg")
+            return None
+        except Exception as e:
+            logger.error(f"{context} 加载原始 SVG 图标失败 {icon_code}: {e}")
+            return None
+
     # ---------- 核心绘图 ----------
     def generate(self, weather_data: Dict[str, Any]) -> bytes:
         width, height = 800, 480
@@ -290,17 +315,13 @@ class WeatherImageGenerator:
             if moon_icon_code:
                 moon_icon = self._load_icon(moon_icon_code, 32, icon_color, context="月相图标")
                 if moon_icon_code:
-                    # 图标大小 = 2 * line_gap（两行字宽）
                     icon_size = 2 * line_gap   # 60px
-                    moon_icon = self._load_icon(moon_icon_code, icon_size, icon_color, context="月相图标")
+                    moon_icon = self._load_raw_icon(moon_icon_code, icon_size, icon_color, context="月相图标")
                     if moon_icon:
-                        # 计算文字行的中间 Y 坐标
-                        # 获取文字边界框
                         bbox = draw.textbbox((right_col_x, moon_text_y), f"月相: {moon_phase}", font=self.font_moon)
-                        text_center_y = (bbox[1] + bbox[3]) / 2   # top + bottom 的一半
-                        # 图标放置位置：文字下方 2*line_gap 间距，且图标的垂直中心与文字行中心对齐
+                        text_center_y = (bbox[1] + bbox[3]) / 2  
                         icon_y = text_center_y + 2 * line_gap - icon_size / 2
-                        img.paste(moon_icon, (right_col_x, int(icon_y)), moon_icon)
+                        img.paste(moon_icon, (right_col_x + char_width, int(icon_y)), moon_icon)
                     else:
                         logger.warning(f"月相图标加载失败: {moon_icon_code}")
                 else:
