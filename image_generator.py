@@ -147,8 +147,10 @@ class WeatherImageGenerator:
             logger.error(f"{context} 加载 SVG 图标失败 {icon_code}: {e}", exc_info=True)
             return None
 
-    def _load_raw_icon(self, icon_code: str, size: int, context: str = "") -> Optional[Image.Image]:
-        """加载 SVG 图标，保持原始颜色，并将透明背景替换为白色"""
+    def _load_raw_icon(self, icon_code: str, size: int, context: str = "", fill_circle_white: bool = False) -> Optional[Image.Image]:
+        """加载 SVG 图标，保持原始颜色（不动态改色）
+        若 fill_circle_white=True，则将图标圆形区域内的空白（alpha=0）填充为白色。
+        """
         if not icon_code:
             return None
         svg_path = os.path.join(self.icon_dir, f"{icon_code}.svg")
@@ -165,18 +167,38 @@ class WeatherImageGenerator:
             icon = Image.open(io.BytesIO(png_bytes))
             if icon.mode != 'RGBA':
                 icon = icon.convert('RGBA')
-            
-            # 创建白色背景图像
-            white_bg = Image.new('RGBA', icon.size, (255, 255, 255, 255))
-            # 使用 alpha 合成：白色背景 + 原始图标（保留非透明部分）
-            result = Image.alpha_composite(white_bg, icon)
-            return result
+
+            # 如果需要填充圆形区域内的空白为白色
+            if fill_circle_white:
+                icon = self._fill_circle_white(icon)
+
+            return icon
         except ImportError:
             logger.error(f"{context} cairosvg 未安装，请执行: pip install cairosvg")
             return None
         except Exception as e:
             logger.error(f"{context} 加载原始 SVG 图标失败 {icon_code}: {e}")
             return None
+
+    def _fill_circle_white(self, img: Image.Image) -> Image.Image:
+        """将图像圆形区域内的透明像素填充为白色，保留前景"""
+        w, h = img.size
+        center_x, center_y = w / 2, h / 2
+        radius = min(w, h) / 2 * 0.9  # 半径略小于图像一半，避免边缘干扰
+        radius_sq = radius * radius
+
+        pixels = img.load()
+        for x in range(w):
+            dx = x - center_x
+            for y in range(h):
+                dy = y - center_y
+                if dx*dx + dy*dy <= radius_sq:
+                    # 圆形区域内
+                    r, g, b, a = pixels[x, y]
+                    if a == 0:  # 完全透明 -> 填充白色
+                        pixels[x, y] = (255, 255, 255, 255)
+                    # 如果需要，也可以将半透明或接近白色的背景填充为纯白，但会破坏月牙形状，故不处理
+        return img
 
     def generate(self, weather_data: Dict[str, Any]) -> bytes:
         width, height = 800, 480
@@ -311,7 +333,7 @@ class WeatherImageGenerator:
 
             if moon_icon_code:
                 icon_size = int(2 * line_gap)  # 60px
-                moon_icon = self._load_raw_icon(moon_icon_code, icon_size, context="月相图标")
+                moon_icon = self._load_raw_icon(moon_icon_code, icon_size, context="月相图标", fill_circle_white=True)
                 if moon_icon:
                     bbox = draw.textbbox((moon_text_x, moon_text_y), f"月相: {moon_phase}", font=self.font_moon)
                     text_center_y = (bbox[1] + bbox[3]) / 2
