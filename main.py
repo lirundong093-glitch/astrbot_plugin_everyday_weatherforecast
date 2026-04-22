@@ -14,7 +14,7 @@ from .api_client import QWeatherClient
 from .image_generator import WeatherImageGenerator
 from .scheduler import WeatherScheduler
 from .llm_guide import LLMGuideGenerator
-
+from .holiday import HolidayChecker
 
 @register("astrbot_plugin_weather", "Your Name", "和风天气预报插件", "2.0.0")
 class WeatherPlugin(Star):
@@ -39,7 +39,11 @@ class WeatherPlugin(Star):
         self.scheduler = WeatherScheduler()
         self.scheduler.set_callback(self._daily_push)
         self._update_schedule_from_config()
-
+        self.holiday_checker = HolidayChecker(
+            cache_dir=self.plugin_dir,
+            enabled=self.config.llm_enabled  
+        )
+        
         # LLM 指南生成器（如果启用）
         if self.config.llm_enabled:
             self.llm_generator = LLMGuideGenerator(
@@ -47,6 +51,7 @@ class WeatherPlugin(Star):
                 api_key=self.config.llm_api_key,
                 base_url=self.config.llm_base_url,
                 model=self.config.llm_model,
+                holiday_checker=self.holiday_checker, 
             )
         else:
             self.llm_generator = None
@@ -234,6 +239,14 @@ class WeatherPlugin(Star):
                 self.config.whitelist_groups = user_config["whitelist_groups"]
             msg = f"✅ 群 {value} 已从白名单移除"
 
+        elif key == "holiday_cache_enabled":
+            enabled = value.lower() in ["true", "1", "yes", "on"]
+            user_config["holiday_cache_enabled"] = enabled
+            self.config.holiday_cache_enabled = enabled
+            if hasattr(self, 'holiday_checker'):
+                self.holiday_checker.enabled = enabled
+            msg = f"✅ 节假日功能已{'开启' if enabled else '关闭'}"
+    
         elif key == "llm_enabled":
             enabled = value.lower() in ["true", "1", "yes", "on"]
             user_config["llm_enabled"] = enabled
