@@ -101,17 +101,10 @@ class LLMGuideGenerator:
         for idx in weather_data.get("indices", []):
             idx_type = str(idx.get("type", ""))
             idx_category = idx.get("category", "")
-            idx_text = idx.get("text", "")
-            if idx_type == "8":     # 舒适度指数
-                comfort_text = f"{idx_category}，{idx_text}" if idx_category or idx_text else "暂无"
-            elif idx_type == "7":   # 花粉过敏指数
-                pollen_text = f"{idx_category}，{idx_text}" if idx_category or idx_text else "暂无"
-            else:
-                # 其他指数汇总
-                if idx_type not in ["7", "8"]:
-                    idx_name = self.INDEX_NAMES.get(idx_type, f"指数{idx_type}")
-                    if idx_category or idx_text:
-                        indices_text += f"- {idx_name}: {idx_category}，{idx_text}\n"
+            idx_text = idx.get("text", "")         
+            idx_name = self.INDEX_NAMES.get(idx_type, f"指数{idx_type}")
+                if idx_category or idx_text:
+                    indices_text += f"- {idx_name}: {idx_category}，{idx_text}\n"
 
         # 构建完整提示词
         prompt = f"""你是一个贴心的天气助手，请根据以下天气信息，为用户生成一段简洁、亲切的今日天气指南（不超过200字）。
@@ -133,8 +126,6 @@ class LLMGuideGenerator:
 风向风速：{wind_dir} {wind_speed} km/h
 紫外线强度：{uv_index}
 空气质量：{aqi} ({aqi_category})
-舒适度指数：{comfort_text}
-花粉过敏指数：{pollen_text}
 
 其他生活指数参考：
 {indices_text if indices_text else "无"}
