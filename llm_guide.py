@@ -1,4 +1,5 @@
 import json
+import asyncio
 from datetime import datetime
 from typing import Dict, Any, Optional
 from astrbot.api import logger
@@ -10,9 +11,9 @@ except ImportError:
 
 
 class LLMGuideGenerator:
-    """LLM 天气指南生成器"""
+    """LLM 天气指南生成器（支持节假日问候）"""
 
-    # 指数类型名称映射
+    # 和风天气指数类型映射表（已根据官方文档修正）
     INDEX_NAMES = {
         "1": "运动指数",
         "2": "洗车指数",
@@ -32,31 +33,54 @@ class LLMGuideGenerator:
         "16": "防晒指数",
     }
 
-    def __init__(self, provider: str = "openai", api_key: str = "", base_url: str = "", model: str = "gpt-4o-mini"):
+    def __init__(self, provider: str = "openai", api_key: str = "", base_url: str = "", model: str = "gpt-4o-mini", holiday_checker=None):
         self.provider = provider
         self.api_key = api_key
         self.base_url = base_url or "https://api.openai.com/v1/chat/completions"
         self.model = model
+        self.holiday_checker = holiday_checker
 
     def _get_weekday(self) -> str:
         """获取当前星期数（中文）"""
         weekdays = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
         return weekdays[datetime.now().weekday()]
 
-    def _build_prompt(self, city: str, weather_data: Dict[str, Any]) -> str:
-        """构建发送给 LLM 的提示词"""
+    async def _build_prompt(self, city: str, weather_data: Dict[str, Any]) -> str:
+        """构建发送给 LLM 的提示词（包含节假日问候）"""
+        today = datetime.now()
         weekday = self._get_weekday()
 
-        today = datetime.datetime.now()
-        days_until_saturday = (5 - today.weekday()) % 7  # 周一=0，周六=5
-        if days_until_saturday == 0:
-            rest_day_text = "今天是休息日！"
-            cheer_text = "好好享受这难得的放松时光吧 (◕‿◕)！"
+        # ---------- 节假日判断 ----------
+        holiday_name = ""
+        is_holiday = False
+        if self.holiday_checker:
+            is_holiday, holiday_name = await self.holiday_checker.check_today()
+
+        if is_holiday and holiday_name:
+            greeting = f"今天是{holiday_name}，{weekday}！🎉"
+            holiday_message = "难得的假期，好好享受这放松的时光吧 (◕‿◕)！"
+            rest_day_text = ""
+            cheer_text = ""
         else:
-            rest_day_text = f"距离休息日还有 {days_until_saturday} 天"
-            if days_until_saturday
-            cheer_text = "加油，再坚持一下，美好的周末就在眼前 (•̀ᴗ•́)و！
-        
+            greeting = f"今天是{weekday}，早上好！☀️"
+            days_until_saturday = (5 - today.weekday()) % 7
+            if days_until_saturday == 0:
+                rest_day_text = "今天是休息日！"
+                cheer_text = "好好享受这难得的放松时光吧 (◕‿◕)！"
+            elif days_until_saturaday == 5:
+                rest_day_text = f"今天是周一"
+                cheer_text = "新的一周开始了，让我们一起加油吧b(￣▽￣)d！"
+            elif days_until_saturaday == 4:
+                rest_day_text = f"今天是周二"
+                cheer_text = "怎么才周二？已经开始想念周末了(┬┬﹏┬┬)！"
+            elif days_until_saturaday == 3:
+                rest_day_text = f"今天是周三"
+                cheer_text = "工作日马上就要过去一半了，如果工作有点疲劳的话就休息一下吧(￣﹃￣)！"
+            else:
+                rest_day_text = f"距离休息日还有 {days_until_saturday} 天"
+                cheer_text = "加油，再坚持一下，美好的周末就在眼前 (•̀ᴗ•́)و！"
+            holiday_message = ""
+
         # 提取天气数据
         temp = weather_data.get("temperature", 0)
         temp_max = weather_data.get("temp_max", 0)
@@ -69,20 +93,37 @@ class LLMGuideGenerator:
         uv_index = weather_data.get("uv_index", 0)
         aqi = weather_data.get("aqi", "")
         aqi_category = weather_data.get("aqi_category", "")
-        
-        # 构建生活指数文本
+
+        # 提取舒适度和花粉过敏指数
+        comfort_text = "暂无"
+        pollen_text = "暂无"
         indices_text = ""
         for idx in weather_data.get("indices", []):
             idx_type = str(idx.get("type", ""))
-            idx_name = self.INDEX_NAMES.get(idx_type, f"指数{idx_type}")
             idx_category = idx.get("category", "")
             idx_text = idx.get("text", "")
-            if idx_category or idx_text:
-                indices_text += f"- {idx_name}: {idx_category}，{idx_text}\n"
+            if idx_type == "8":     # 舒适度指数
+                comfort_text = f"{idx_category}，{idx_text}" if idx_category or idx_text else "暂无"
+            elif idx_type == "7":   # 花粉过敏指数
+                pollen_text = f"{idx_category}，{idx_text}" if idx_category or idx_text else "暂无"
+            else:
+                # 其他指数汇总
+                if idx_type not in ["7", "8"]:
+                    idx_name = self.INDEX_NAMES.get(idx_type, f"指数{idx_type}")
+                    if idx_category or idx_text:
+                        indices_text += f"- {idx_name}: {idx_category}，{idx_text}\n"
 
-        prompt = f"""你是一个贴心的天气助手，请根据以下天气信息，为用户生成一段简洁、亲切的今日天气指南（不超过300字）。
+        # 构建完整提示词
+        prompt = f"""你是一个贴心的天气助手，请根据以下天气信息，为用户生成一段简洁、亲切的今日天气指南（不超过200字）。
 
-今天是{weekday}。
+{greeting}
+"""
+        if rest_day_text:
+            prompt += f"{rest_day_text}。{cheer_text}\n\n"
+        if holiday_message:
+            prompt += f"{holiday_message}\n\n"
+
+        prompt += f"""下面是今日天气信息：
 城市：{city}
 天气状况：{weather_text}
 当前温度：{temp}°C
@@ -92,9 +133,11 @@ class LLMGuideGenerator:
 风向风速：{wind_dir} {wind_speed} km/h
 紫外线强度：{uv_index}
 空气质量：{aqi} ({aqi_category})
+舒适度指数：{comfort_text}
+花粉过敏指数：{pollen_text}
 
-生活指数参考：
-{indices_text if indices_text else "无生活指数数据"}
+其他生活指数参考：
+{indices_text if indices_text else "无"}
 
 请结合今天的天气状况和星期数，用亲切、活泼的语气给用户一些实用的生活建议（比如穿衣、出行、是否适合晾晒/运动等）。
 要求：
@@ -111,7 +154,7 @@ class LLMGuideGenerator:
             logger.error("aiohttp 未安装，无法调用 LLM")
             return None
 
-        prompt = self._build_prompt(city, weather_data)
+        prompt = await self._build_prompt(city, weather_data)
 
         headers = {
             "Content-Type": "application/json",
