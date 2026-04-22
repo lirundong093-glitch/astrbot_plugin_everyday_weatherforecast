@@ -53,8 +53,8 @@ class QWeatherClient:
 
         self.GEO_URL = f"https://{self.api_host}/geo/v2/city/lookup"
         self.WEATHER_NOW_URL = f"https://{self.api_host}/v7/weather/now"
-        self.WEATHER_DAILY_URL = f"https://{self.api_host}/v7/weather/1d"
-        self.AIR_QUALITY_URL = f"https://{self.api_host}/airquality/v1/daily/"
+        self.WEATHER_DAILY_URL = f"https://{self.api_host}/v7/weather/3d"
+        self.AIR_DAILY_URL = f"https://{self.api_host}/airquality/v1/daily/"
         self.INDICES_URL = f"https://{self.api_host}/v7/indices/1d"
         logger.info(f"API 端点已构建，使用 Host: {self.api_host}")
 
@@ -103,6 +103,28 @@ class QWeatherClient:
         loc = locations[0]
         return (loc.get("id"), loc.get("name", city_name))
 
+    async def _get_lat_lon_from_geoapi(self, city_name: str) -> Tuple[Optional[float], Optional[float]]:
+        """通过 GeoAPI 获取城市的经纬度返回: (lat, lon)"""
+        if not self.GEO_URL:
+            return None, None
+        params = {"location": city_name, "number": 1}
+        data = await self._request(self.GEO_URL, params)
+        if not data:
+            return None, None
+        locations = data.get("location", [])
+        if not locations:
+            logger.warning(f"GeoAPI 未找到城市经纬度: {city_name}")
+            return None, None
+        loc = locations[0]
+        lat = loc.get("lat")
+        lon = loc.get("lon")
+        if lat and lon:
+            try:
+                return float(lat), float(lon)
+            except ValueError:
+                return None, None
+        return None, None
+
     async def get_location_id(self, city_name: str) -> Optional[Tuple[str, str]]:
         """获取 Location ID，优先本地 CSV，失败则 GeoAPI"""
         loc_id = self._city_id_map.get(city_name)
@@ -126,8 +148,9 @@ class QWeatherClient:
     async def get_weather_daily(self, location_id: str) -> Optional[Dict[str, Any]]:
         return await self._request(self.WEATHER_DAILY_URL, {"location": location_id})
 
-    async def get_air_quality(self, location_id: str) -> Optional[Dict[str, Any]]:
-        return await self._request(self.AIR_QUALITY_URL, {"location": location_id})
+    async def get_air_daily_forecast(self, lat: float, lon: float) -> Optional[Dict[str, Any]]:
+        url = f"{self.AIR_DAILY_URL}/{lat:.2f}/{lon:.2f}"
+        return await self._request(url, {})
 
     async def get_indices(self, location_id: str) -> Optional[Dict[str, Any]]:
         return await self._request(self.INDICES_URL, {"location": location_id, "type": self.INDICES_TYPES})
@@ -142,11 +165,17 @@ class QWeatherClient:
         location_id, display_name = loc_result
         logger.info(f"使用 LocationID: {location_id}, 显示名称: {display_name}")
 
+        lat, lon = await self._get_lat_lon_from_geoapi(city)
+        if lat is None or lon is None:
+            logger.error(f"获取经纬度失败: {city}")
+            return None
+        logger.info(f"获取到经纬度: lat={lat:.2f}, lon={lon:.2f}")
+
         try:
             now_data, daily_data, aqi_data, indices_data = await asyncio.gather(
                 self.get_weather_now(location_id),
                 self.get_weather_daily(location_id),
-                self.get_air_quality(location_id),
+                self.get_air_daily_forecast(lat, lon),
                 self.get_indices(location_id),
                 return_exceptions=True
             )
@@ -189,8 +218,8 @@ class QWeatherClient:
             "moon_phase": today.get("moonPhase", ""),
             "moon_icon": today.get("moonPhase", {}).get("icon", "") if isinstance(today.get("moonPhase"), dict) else "",
             "uv_index": today.get("uvIndex", 0),
-            "aqi": aqi_data.get("now", {}).get("aqi", "") if aqi_data and not isinstance(aqi_data, Exception) else "",
-            "aqi_category": aqi_data.get("now", {}).get("category", "") if aqi_data and not isinstance(aqi_data, Exception) else "",
+            "aqi": str(next((item.get("aqi", "") for item in air_daily_data.get("days", [{}])[0].get("indexes", []) if item.get("code") == "qaqi"), "")) if air_daily_data and not isinstance(air_daily_data, Exception) else "",
+            "aqi_category": next((item.get("category", "") for item in air_daily_data.get("days", [{}])[0].get("indexes", []) if item.get("code") == "qaqi"), "") if air_daily_data and not isinstance(air_daily_data, Exception) else "",
             "indices": indices_data.get("daily", []) if indices_data and not isinstance(indices_data, Exception) else [],
             "raw_daily": daily_list,
             "raw_now": now_data,
