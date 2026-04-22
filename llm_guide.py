@@ -15,15 +15,21 @@ class LLMGuideGenerator:
     # 指数类型名称映射
     INDEX_NAMES = {
         "1": "运动指数",
-        "2": "穿衣指数",
+        "2": "洗车指数",
+        "3": "穿衣指数",
+        "4": "钓鱼指数",
         "5": "紫外线指数",
         "6": "旅游指数",
-        "7": "感冒指数",
-        "8": "空气污染扩散条件指数",
-        "10": "空调开启指数",
-        "12": "晾晒指数",
-        "13": "交通指数",
-        "14": "防晒指数",
+        "7": "花粉过敏指数",
+        "8": "舒适度指数",
+        "9": "感冒指数",
+        "10": "空气污染扩散条件指数",
+        "11": "空调开启指数",
+        "12": "太阳镜指数",
+        "13": "化妆指数",
+        "14": "晾晒指数",
+        "15": "交通指数",
+        "16": "防晒指数",
     }
 
     def __init__(self, provider: str = "openai", api_key: str = "", base_url: str = "", model: str = "gpt-4o-mini"):
@@ -40,6 +46,16 @@ class LLMGuideGenerator:
     def _build_prompt(self, city: str, weather_data: Dict[str, Any]) -> str:
         """构建发送给 LLM 的提示词"""
         weekday = self._get_weekday()
+
+        today = datetime.datetime.now()
+        days_until_saturday = (5 - today.weekday()) % 7  # 周一=0，周六=5
+        if days_until_saturday == 0:
+            rest_day_text = "今天是休息日！"
+            cheer_text = "好好享受这难得的放松时光吧 (◕‿◕)！"
+        else:
+            rest_day_text = f"距离休息日还有 {days_until_saturday} 天"
+            if days_until_saturday
+            cheer_text = "加油，再坚持一下，美好的周末就在眼前 (•̀ᴗ•́)و！
         
         # 提取天气数据
         temp = weather_data.get("temperature", 0)
