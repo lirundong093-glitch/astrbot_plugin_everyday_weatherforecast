@@ -53,8 +53,8 @@ class QWeatherClient:
 
         self.GEO_URL = f"https://{self.api_host}/geo/v2/city/lookup"
         self.WEATHER_NOW_URL = f"https://{self.api_host}/v7/weather/now"
-        self.WEATHER_DAILY_URL = f"https://{self.api_host}/v7/weather/7d"
-        self.AIR_QUALITY_URL = f"https://{self.api_host}/v7/air/now"
+        self.WEATHER_DAILY_URL = f"https://{self.api_host}/v7/weather/1d"
+        self.AIR_QUALITY_URL = f"https://{self.api_host}/airquality/v1/daily/"
         self.INDICES_URL = f"https://{self.api_host}/v7/indices/1d"
         logger.info(f"API 端点已构建，使用 Host: {self.api_host}")
 
