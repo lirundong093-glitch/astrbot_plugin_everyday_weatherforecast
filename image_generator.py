@@ -148,6 +148,7 @@ class WeatherImageGenerator:
             return None
 
     def _load_raw_icon(self, icon_code: str, size: int, context: str = "") -> Optional[Image.Image]:
+        """加载 SVG 图标，保持原始颜色，并将透明背景替换为白色"""
         if not icon_code:
             return None
         svg_path = os.path.join(self.icon_dir, f"{icon_code}.svg")
@@ -164,7 +165,12 @@ class WeatherImageGenerator:
             icon = Image.open(io.BytesIO(png_bytes))
             if icon.mode != 'RGBA':
                 icon = icon.convert('RGBA')
-            return icon
+            
+            # 创建白色背景图像
+            white_bg = Image.new('RGBA', icon.size, (255, 255, 255, 255))
+            # 使用 alpha 合成：白色背景 + 原始图标（保留非透明部分）
+            result = Image.alpha_composite(white_bg, icon)
+            return result
         except ImportError:
             logger.error(f"{context} cairosvg 未安装，请执行: pip install cairosvg")
             return None
