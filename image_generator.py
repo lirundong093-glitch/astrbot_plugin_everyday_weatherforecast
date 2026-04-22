@@ -29,9 +29,12 @@ class WeatherImageGenerator:
         self.font_small = self._load_font(14)           # 日出日落等
 
         # 图标目录（用户下载的和风天气官方图标位置，建议提前转为 PNG）
-        self.icon_dir = os.path.expanduser("~/fonts")
+        self.plugin_dir = plugin_dir
+        self.icon_dir = os.path.join(self.plugin_dir, "icons")
         if not os.path.exists(self.icon_dir):
             logger.warning(f"图标目录不存在: {self.icon_dir}，请确保已下载和风天气官方图标")
+        else:
+            logger.info(f"图标目录已设置: {self.icon_dir}")
 
     # ---------- 字体查找与加载 ----------
     def _build_font_paths(self) -> List[str]:
@@ -112,9 +115,9 @@ class WeatherImageGenerator:
         if not icon_code:
             icon_code = "100"  # 默认晴天图标
         # 图标统一存放在项目根目录的 /icons/ 下，您可以根据自己的部署位置调整
-        icon_file = os.path.join("/icons", f"{icon_code}.svg")
-        if os.path.exists(icon_file):
-            return icon_file
+        icon_file = os.path.join(self.icon_dir, f"{icon_code}.svg")
+        if os.path.exists(svg_path):
+            return svg_path
         return ""
 
     def _load_icon(self, icon_code: str, size: int = 110) -> Optional[Image.Image]:
