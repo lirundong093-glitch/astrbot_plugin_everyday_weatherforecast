@@ -103,8 +103,8 @@ class LLMGuideGenerator:
             idx_category = idx.get("category", "")
             idx_text = idx.get("text", "")         
             idx_name = self.INDEX_NAMES.get(idx_type, f"指数{idx_type}")
-                if idx_category or idx_text:
-                    indices_text += f"- {idx_name}: {idx_category}，{idx_text}\n"
+            if idx_category or idx_text:
+                indices_text += f"- {idx_name}: {idx_category}，{idx_text}\n"
 
         # 构建完整提示词
         prompt = f"""你是一个贴心的天气助手，请根据以下天气信息，为用户生成一段简洁、亲切的今日天气指南（不超过200字）。
