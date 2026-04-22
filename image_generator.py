@@ -11,7 +11,7 @@ from astrbot.api import logger
 class WeatherImageGenerator:
     """天气图片生成器 - 仿 open-weather-image 风格 (右侧大图标 + 月相)"""
 
-    def __init__(self):
+    def __init__(self, plugin_dir: str = ""): 
         # 跨平台字体搜索
         self.font_search_paths = self._build_font_paths()
         self.font_path = self._find_chinese_font()
