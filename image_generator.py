@@ -30,7 +30,10 @@ class WeatherImageGenerator:
 
         # 图标目录（用户下载的和风天气官方图标位置，建议提前转为 PNG）
         self.plugin_dir = plugin_dir
-        self.icon_dir = os.path.join(self.plugin_dir, "icons")
+        if plugin_dir:
+            self.icon_dir = os.path.join(self.plugin_dir, "icons")
+        else:
+            self.icon_dir = os.path.expanduser("~/icons")
         if not os.path.exists(self.icon_dir):
             logger.warning(f"图标目录不存在: {self.icon_dir}，请确保已下载和风天气官方图标")
         else:
@@ -115,7 +118,7 @@ class WeatherImageGenerator:
         if not icon_code:
             icon_code = "100"  # 默认晴天图标
         # 图标统一存放在项目根目录的 /icons/ 下，您可以根据自己的部署位置调整
-        icon_file = os.path.join(self.icon_dir, f"{icon_code}.svg")
+        svg_path = os.path.join(self.icon_dir, f"{icon_code}.svg")
         if os.path.exists(svg_path):
             return svg_path
         return ""
