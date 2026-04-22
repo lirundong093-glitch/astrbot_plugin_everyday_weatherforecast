@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Optional
 
 import astrbot.api.message_components as Comp
-from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult
+from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger
 
@@ -16,34 +16,36 @@ from .scheduler import WeatherScheduler
 from .llm_guide import LLMGuideGenerator
 from .holiday import HolidayChecker
 
+
 @register("astrbot_plugin_weather", "Your Name", "和风天气预报插件", "2.0.0")
 class WeatherPlugin(Star):
     def __init__(self, context: Context, config: Optional[dict] = None):
         super().__init__(context)
 
-        # 插件目录
         self.plugin_dir = os.path.dirname(os.path.abspath(__file__))
         self.config = PluginConfig(self.plugin_dir)
 
-        # 和风天气客户端
+        # 和风天气 API 客户端
         self.api_client = QWeatherClient(
-            self.config.qweather_key, 
+            self.config.qweather_key,
             self.config.api_host,
             self.plugin_dir
         )
-        
-        # 图片生成器
-        self.image_generator = WeatherImageGenerator(plugin_dir=self.plugin_dir)
 
-        # 定时调度器
+        # 图片生成器
+        self.image_generator = WeatherImageGenerator()
+
+        # 定时任务调度器
         self.scheduler = WeatherScheduler()
         self.scheduler.set_callback(self._daily_push)
         self._update_schedule_from_config()
+
+        # 节假日检测器（与 LLM 开关联动）
         self.holiday_checker = HolidayChecker(
             cache_dir=self.plugin_dir,
-            enabled=self.config.llm_enabled  
+            enabled=self.config.llm_enabled
         )
-        
+
         # LLM 指南生成器（如果启用）
         if self.config.llm_enabled:
             self.llm_generator = LLMGuideGenerator(
@@ -51,7 +53,7 @@ class WeatherPlugin(Star):
                 api_key=self.config.llm_api_key,
                 base_url=self.config.llm_base_url,
                 model=self.config.llm_model,
-                holiday_checker=self.holiday_checker, 
+                holiday_checker=self.holiday_checker
             )
         else:
             self.llm_generator = None
@@ -68,13 +70,12 @@ class WeatherPlugin(Star):
         group_id = event.get_group_id()
         if group_id:
             return self.config.is_group_allowed(group_id)
-        # 私聊消息始终允许
-        return True
+        return True  # 私聊始终允许
 
     async def _get_weather_image(self, city: str) -> Optional[bytes]:
         """获取指定城市的天气图片（bytes）"""
-        if not self.config.qweather_key:
-            logger.error("和风天气 API Key 未配置")
+        if not self.config.qweather_key or not self.config.api_host:
+            logger.error("和风天气 API Key 或 API Host 未配置")
             return None
 
         weather_data = await self.api_client.get_complete_weather(city)
@@ -85,19 +86,17 @@ class WeatherPlugin(Star):
 
     async def _daily_push(self):
         """每日定时推送任务"""
-        if not self.config.qweather_key:
-            logger.warning("和风天气 API Key 未配置，跳过定时推送")
+        if not self.config.qweather_key or not self.config.api_host:
+            logger.warning("和风天气 API Key 或 API Host 未配置，跳过定时推送")
             return
 
         logger.info(f"开始每日天气推送，默认城市: {self.config.default_city}")
 
-        # 获取完整天气数据（LLM 生成指南也需要这份数据）
         weather_data = await self.api_client.get_complete_weather(self.config.default_city)
         if not weather_data:
             logger.error("获取天气数据失败，定时推送中止")
             return
 
-        # 生成天气图片
         image_bytes = self.image_generator.generate(weather_data)
 
         # 如果启用 LLM，生成天气指南
@@ -131,8 +130,8 @@ class WeatherPlugin(Star):
         if not self._check_whitelist(event):
             return
 
-        if not self.config.qweather_key:
-            yield event.plain_result("⚠️ 请先配置和风天气 API Key")
+        if not self.config.qweather_key or not self.config.api_host:
+            yield event.plain_result("⚠️ 请先配置和风天气 API Key 和 API Host")
             return
 
         message = event.message_str.strip()
@@ -165,9 +164,10 @@ class WeatherPlugin(Star):
         """
         配置指令：/weather_config [key] [value]
         支持的配置项：
-            qweather_key, default_city, push_time,
+            qweather_key, api_host, default_city, push_time,
             whitelist_add, whitelist_remove,
-            llm_enabled, llm_provider, llm_api_key, llm_base_url, llm_model
+            llm_enabled, llm_provider, llm_api_key, llm_base_url, llm_model,
+            holiday_cache_enabled
         """
         # 可在此处添加管理员权限检查
         # if not event.is_admin():
@@ -175,7 +175,6 @@ class WeatherPlugin(Star):
         #     return
 
         if not key:
-            # 显示当前配置
             info = f"""📋 当前配置：
 • 和风天气 Key: {'已设置' if self.config.qweather_key else '❌ 未设置'}
 • API Host: {self.config.api_host or '❌ 未设置'}
@@ -184,11 +183,12 @@ class WeatherPlugin(Star):
 • 白名单群: {', '.join(self.config.whitelist_groups) if self.config.whitelist_groups else '全部群聊'}
 • LLM 指南: {'开启' if self.config.llm_enabled else '关闭'}
 • LLM 提供商: {self.config.llm_provider}
-• LLM 模型: {self.config.llm_model}"""
+• LLM 模型: {self.config.llm_model}
+• 节假日功能: {'开启' if self.config.holiday_cache_enabled else '关闭'}"""
             yield event.plain_result(info)
             return
 
-        if not value and key not in ["llm_enabled"]:
+        if not value and key not in ["llm_enabled", "holiday_cache_enabled"]:
             yield event.plain_result("⚠️ 请提供配置值")
             return
 
@@ -210,10 +210,10 @@ class WeatherPlugin(Star):
         elif key == "api_host":
             user_config["api_host"] = value.strip()
             self.config.api_host = value.strip()
-            self.api_client.api_host = value.strip()   # 动态更新客户端中的值
-            self.api_client._build_endpoints()         # 重新构建 URL
+            self.api_client.api_host = value.strip()
+            self.api_client._build_endpoints()
             msg = f"✅ API Host 已更新为: {value}"
-        
+
         elif key == "default_city":
             user_config["default_city"] = value
             self.config.default_city = value
@@ -239,24 +239,18 @@ class WeatherPlugin(Star):
                 self.config.whitelist_groups = user_config["whitelist_groups"]
             msg = f"✅ 群 {value} 已从白名单移除"
 
-        elif key == "holiday_cache_enabled":
-            enabled = value.lower() in ["true", "1", "yes", "on"]
-            user_config["holiday_cache_enabled"] = enabled
-            self.config.holiday_cache_enabled = enabled
-            if hasattr(self, 'holiday_checker'):
-                self.holiday_checker.enabled = enabled
-            msg = f"✅ 节假日功能已{'开启' if enabled else '关闭'}"
-    
         elif key == "llm_enabled":
             enabled = value.lower() in ["true", "1", "yes", "on"]
             user_config["llm_enabled"] = enabled
             self.config.llm_enabled = enabled
+            self.holiday_checker.enabled = enabled
             if enabled and not self.llm_generator:
                 self.llm_generator = LLMGuideGenerator(
                     provider=self.config.llm_provider,
                     api_key=self.config.llm_api_key,
                     base_url=self.config.llm_base_url,
                     model=self.config.llm_model,
+                    holiday_checker=self.holiday_checker
                 )
             elif not enabled:
                 self.llm_generator = None
@@ -289,6 +283,13 @@ class WeatherPlugin(Star):
             if self.llm_generator:
                 self.llm_generator.model = value
             msg = f"✅ LLM 模型已设置为: {value}"
+
+        elif key == "holiday_cache_enabled":
+            enabled = value.lower() in ["true", "1", "yes", "on"]
+            user_config["holiday_cache_enabled"] = enabled
+            self.config.holiday_cache_enabled = enabled
+            self.holiday_checker.enabled = enabled
+            msg = f"✅ 节假日功能已{'开启' if enabled else '关闭'}"
 
         else:
             yield event.plain_result(f"❌ 未知配置项: {key}")
