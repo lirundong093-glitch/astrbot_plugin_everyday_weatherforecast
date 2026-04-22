@@ -33,7 +33,7 @@ class WeatherPlugin(Star):
         )
         
         # 图片生成器
-        self.image_generator = WeatherImageGenerator()
+        self.image_generator = WeatherImageGenerator(plugin_dir=self.plugin_dir)
 
         # 定时调度器
         self.scheduler = WeatherScheduler()
