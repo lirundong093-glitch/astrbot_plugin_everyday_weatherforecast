@@ -251,7 +251,7 @@ class QWeatherClient:
             "moonrise": today.get("moonrise", ""),
             "moonset": today.get("moonset", ""),
             "moon_phase": today.get("moonPhase", ""),
-            "moon_icon": today.get("moonPhase", {}).get("icon", "") if isinstance(today.get("moonPhase"), dict) else "",
+            "moon_icon": today.get("moonPhaseIcon", ""),
             "uv_index": today.get("uvIndex", 0),
             "aqi": aqi_value,
             "aqi_category": aqi_category,
