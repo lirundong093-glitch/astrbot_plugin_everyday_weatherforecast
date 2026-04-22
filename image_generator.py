@@ -300,26 +300,21 @@ class WeatherImageGenerator:
         if moon_phase:
             char_width = draw.textlength("月", font=self.font_moon)
             moon_text_y = info_y_start + len(right_col_items) * line_gap
-            # 月相文字起始 x 右移一个字宽度
-            moon_text_x = right_col_x + char_width
-            draw.text((moon_text_x, moon_text_y), f"月相:  {moon_phase}", fill=text_main, font=self.font_moon)
+            moon_text_x = int(right_col_x + char_width)
+            draw.text((moon_text_x, moon_text_y), f"月相: {moon_phase}", fill=text_main, font=self.font_moon)
 
             if moon_icon_code:
-                # 图标大小 = 2 * line_gap (60px)
-                icon_size = int(2 * line_gap)
+                icon_size = int(2 * line_gap)  # 60px
                 moon_icon = self._load_raw_icon(moon_icon_code, icon_size, context="月相图标")
                 if moon_icon:
-                    # 计算文字行的中心 Y 坐标
                     bbox = draw.textbbox((moon_text_x, moon_text_y), f"月相: {moon_phase}", font=self.font_moon)
                     text_center_y = (bbox[1] + bbox[3]) / 2
-                    # 图标放置在文字中心下方 2*line_gap 处，且图标中心与文字行中心对齐
                     icon_y = text_center_y + 2 * line_gap - icon_size / 2
                     img.paste(moon_icon, (moon_text_x, int(icon_y)), moon_icon)
                 else:
                     logger.warning(f"月相图标加载失败: {moon_icon_code}")
             else:
                 logger.info("月相图标代码为空，不显示月相图标")
-
         # 转换为 bytes
         img_bytes = io.BytesIO()
         img.save(img_bytes, format="PNG")
