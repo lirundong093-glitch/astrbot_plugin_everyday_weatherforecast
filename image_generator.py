@@ -141,8 +141,9 @@ class WeatherImageGenerator:
             modified_svg = ET.tostring(root, encoding='unicode')
             
             import cairosvg
+            size_int = int(size)
             png_bytes = cairosvg.svg2png(bytestring=modified_svg.encode('utf-8'),
-                                         output_width=size, output_height=size)
+                                         output_width=size, output_height=size_int)
             icon = Image.open(io.BytesIO(png_bytes))
             if icon.mode != 'RGBA':
                 icon = icon.convert('RGBA')
@@ -167,8 +168,9 @@ class WeatherImageGenerator:
             import cairosvg
             with open(svg_path, 'r', encoding='utf-8') as f:
                 svg_content = f.read()
+            size_int = int(size)
             png_bytes = cairosvg.svg2png(bytestring=svg_content.encode('utf-8'),
-                                         output_width=size, output_height=size)
+                                         output_width=size, output_height=size_int)
             icon = Image.open(io.BytesIO(png_bytes))
             if icon.mode != 'RGBA':
                 icon = icon.convert('RGBA')
