@@ -39,7 +39,7 @@ class WeatherImageGenerator:
         self.font_weather = self._load_font(22)
         self.font_label = self._load_font(18)
         self.font_value = self._load_font(18)
-        self.font_moon = self._load_font(18)
+        self.font_moon = self._load_font(18)   # 月相文字字体
 
     # ---------- 字体查找与加载 ----------
     def _build_font_paths(self) -> List[str]:
@@ -111,14 +111,17 @@ class WeatherImageGenerator:
         return is_day_by_time and cloud < 70
 
     # ---------- SVG 图标加载并动态改色 ----------
-    def _load_icon(self, icon_code: str, size: int, color_hex: str) -> Optional[Image.Image]:
-        """加载 SVG 图标，修改填充色，转换为 PIL Image"""
+    def _load_icon(self, icon_code: str, size: int, color_hex: str, context: str = "") -> Optional[Image.Image]:
+        """加载 SVG 图标，修改填充色，转换为 PIL Image
+        context 用于日志标识（如 "月相图标"）
+        """
         if not icon_code:
+            logger.debug(f"{context} 图标代码为空，跳过")
             return None
 
         svg_path = os.path.join(self.icon_dir, f"{icon_code}.svg")
         if not os.path.exists(svg_path):
-            logger.warning(f"SVG 图标不存在: {svg_path}")
+            logger.warning(f"{context} SVG 图标不存在: {svg_path}")
             return None
 
         try:
@@ -136,18 +139,20 @@ class WeatherImageGenerator:
             set_fill(root, color_hex)
 
             modified_svg = ET.tostring(root, encoding='unicode')
+            
             import cairosvg
             png_bytes = cairosvg.svg2png(bytestring=modified_svg.encode('utf-8'),
                                          output_width=size, output_height=size)
             icon = Image.open(io.BytesIO(png_bytes))
             if icon.mode != 'RGBA':
                 icon = icon.convert('RGBA')
+            logger.debug(f"{context} 图标加载成功: {icon_code}.svg")
             return icon
         except ImportError:
-            logger.error("cairosvg 未安装，无法加载 SVG 图标。请执行: pip install cairosvg")
+            logger.error(f"{context} cairosvg 未安装，无法加载 SVG 图标。请执行: pip install cairosvg")
             return None
         except Exception as e:
-            logger.error(f"加载 SVG 图标失败 {icon_code}: {e}")
+            logger.error(f"{context} 加载 SVG 图标失败 {icon_code}: {e}", exc_info=True)
             return None
 
     # ---------- 核心绘图 ----------
@@ -156,38 +161,34 @@ class WeatherImageGenerator:
         img = Image.new("RGB", (width, height), color=(255, 255, 255))
         draw = ImageDraw.Draw(img)
 
-        # 判断白天模式
         is_day_mode = self._is_daytime(weather_data)
 
-        # 根据模式设定左右背景色、字体颜色、分割线颜色、图标颜色
         if is_day_mode:
-            left_bg = (255, 217, 130)   # #FFD982
-            right_bg = (94, 206, 246)   # #5ECEF6
+            left_bg = (255, 217, 130)
+            right_bg = (94, 206, 246)
             text_main = (0, 0, 0)
             text_secondary = (80, 80, 80)
-            line_color = (191, 162, 97) # #BFA261
-            icon_color = "#000000"      # 黑色
+            line_color = (191, 162, 97)
+            icon_color = "#000000"
         else:
-            left_bg = (37, 57, 92)      # #25395C
-            right_bg = (28, 42, 79)     # #1C2A4F
+            left_bg = (37, 57, 92)
+            right_bg = (28, 42, 79)
             text_main = (255, 255, 255)
             text_secondary = (200, 200, 200)
-            line_color = (92, 107, 133) # #5C6B85
-            icon_color = "#FFFFFF"      # 白色
+            line_color = (92, 107, 133)
+            icon_color = "#FFFFFF"
 
-        # 分区
         right_width = width // 4
         left_width = width - right_width
         right_x_start = left_width
 
-        # 绘制左右背景
         draw.rectangle([(0, 0), (left_width, height)], fill=left_bg)
         draw.rectangle([(right_x_start, 0), (width, height)], fill=right_bg)
 
         # 右侧大图标
         icon_code = weather_data.get("icon", "100")
         icon_size = 160
-        icon = self._load_icon(icon_code, icon_size, icon_color)
+        icon = self._load_icon(icon_code, icon_size, icon_color, context="右侧天气图标")
         if icon:
             icon_x = right_x_start + (right_width - icon_size) // 2
             icon_y = (height - icon_size) // 2
@@ -195,7 +196,6 @@ class WeatherImageGenerator:
         else:
             logger.warning(f"无法加载右侧大图标: {icon_code}")
 
-        # 左侧布局
         left_padding = 25
 
         # 第1部分：城市、日期
@@ -225,7 +225,7 @@ class WeatherImageGenerator:
         draw.text((left_padding, temp_y_start + 85), range_text, fill=text_secondary, font=self.font_label)
 
         weather_text = weather_data.get("weather", "未知")
-        small_icon = self._load_icon(icon_code, 40, icon_color)
+        small_icon = self._load_icon(icon_code, 40, icon_color, context="天气小图标")
         if small_icon:
             img.paste(small_icon, (left_padding, temp_y_start + 120), small_icon)
         draw.text((left_padding + 50, temp_y_start + 128), weather_text, fill=text_main, font=self.font_weather)
@@ -235,7 +235,7 @@ class WeatherImageGenerator:
 
         # 第3部分：两列信息
         info_y_start = line_y + 20
-        line_gap = 30
+        line_gap = 30  # 行间距，日出日落与月相之间使用相同间距
 
         wind_dir = weather_data.get("wind_dir", "")
         wind_speed = weather_data.get("wind_speed", 0)
@@ -263,7 +263,6 @@ class WeatherImageGenerator:
             ("AQI", f"{aqi} {aqi_category}" if aqi else "无数据"),
         ]
 
-        # 右列信息（仅日出日落）
         right_col_items = [
             ("日出", sunrise if sunrise else "--:--"),
             ("日落", sunset if sunset else "--:--"),
@@ -281,16 +280,25 @@ class WeatherImageGenerator:
             draw.text((right_col_x, y), f"{label}:", fill=text_main, font=self.font_label)
             draw.text((right_col_x + 55, y), value, fill=text_main, font=self.font_value)
 
-        # 月相：位于日落下方，间距为 line_gap
+        # 月相部分：文字在上，图标在下，与上一项的间距为 line_gap
         if moon_phase:
-            moon_text_y = info_y_start + 2 * line_gap  # 日落后的下一行
+            # 月相文字位置：日出日落之后 + line_gap
+            moon_text_y = info_y_start + len(right_col_items) * line_gap
             draw.text((right_col_x, moon_text_y), f"月相: {moon_phase}", fill=text_main, font=self.font_moon)
-            # 月相图标放在文字下方，大小约两行字高 (32x32)
+            
+            # 月相图标放在文字下方，距离为 line_gap 的一半（避免过于拥挤），图标大小 32x32
             if moon_icon_code:
-                moon_icon = self._load_icon(moon_icon_code, 32, icon_color)
+                moon_icon = self._load_icon(moon_icon_code, 32, icon_color, context="月相图标")
                 if moon_icon:
-                    icon_y = moon_text_y + 24  # 文字高度估算，留出间距
+                    # 图标放在文字下方，垂直偏移 24px（约 line_gap 的 0.8 倍）
+                    icon_y = moon_text_y + 24
                     img.paste(moon_icon, (right_col_x, icon_y), moon_icon)
+                else:
+                    logger.warning(f"月相图标加载失败: {moon_icon_code}")
+            else:
+                logger.debug("月相图标代码为空，不显示月相图标")
+        else:
+            logger.debug("无月相数据，跳过月相绘制")
 
         # 转换为 bytes
         img_bytes = io.BytesIO()
