@@ -313,13 +313,13 @@ class WeatherImageGenerator:
             
             # 月相图标放在文字下方，距离为 line_gap 的一半（避免过于拥挤），图标大小 32x32
             if moon_icon_code:
-                moon_icon = self._load_icon(moon_icon_code, 32, icon_color, context="月相图标")
+                moon_icon = self._load_icon(moon_icon_code, 32, icon_color, "月相图标")
                 if moon_icon_code:
                     icon_size = 2 * line_gap   # 60px
-                    moon_icon = self._load_raw_icon(moon_icon_code, icon_size, icon_color, context="月相图标")
+                    moon_icon = self._load_raw_icon(moon_icon_code, icon_size, "月相图标")
                     if moon_icon:
-                        bbox = draw.textbbox((right_col_x, moon_text_y), f"月相: {moon_phase}", font=self.font_moon)
-                        text_center_y = (bbox[1] + bbox[3]) / 2  
+                        bbox = draw.textbbox((right_col_x, moon_text_y), f"月相:  {moon_phase}", font=self.font_moon)
+                        text_center_y = (bbox[1] + bbox[3]) / 2
                         icon_y = text_center_y + 2 * line_gap - icon_size / 2
                         img.paste(moon_icon, (right_col_x + char_width, int(icon_y)), moon_icon)
                     else:
