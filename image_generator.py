@@ -1,6 +1,7 @@
 import io
 import os
 import platform
+import xml.etree.ElementTree as ET
 from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
 from typing import Dict, Any, Optional, List, Tuple
@@ -8,12 +9,10 @@ from astrbot.api import logger
 
 
 class WeatherImageGenerator:
-    """天气图片生成器 - 左右分栏布局，动态昼夜配色"""
-
-    DEFAULT_ICON_CODE = "100"
+    """天气图片生成器 - 左右分栏布局，动态昼夜配色，SVG 图标动态改色"""
 
     def __init__(self, plugin_dir: str = ""):
-        # 图标目录：优先使用插件目录下的 icons 文件夹
+        # 图标目录：插件目录下的 icons 文件夹
         if plugin_dir:
             self.icon_dir = os.path.join(plugin_dir, "icons")
         else:
@@ -42,7 +41,7 @@ class WeatherImageGenerator:
         self.font_value = self._load_font(18)
         self.font_moon = self._load_font(18)
 
-    # ---------- 字体查找与加载（保持不变）----------
+    # ---------- 字体查找与加载 ----------
     def _build_font_paths(self) -> List[str]:
         paths = []
         system = platform.system()
@@ -98,11 +97,6 @@ class WeatherImageGenerator:
 
     # ---------- 增强的昼夜判断 ----------
     def _is_daytime(self, weather_data: Dict[str, Any]) -> bool:
-        """
-        判断当前是否为白天
-        优先使用日出/日落时间（如果有），否则根据图标代码
-        同时结合云量阈值：白天且云量<70 返回 True，否则返回 False
-        """
         cloud = weather_data.get("cloud", 0)
         dt = weather_data.get("dt")
         sys = weather_data.get("sys", {})
@@ -116,45 +110,51 @@ class WeatherImageGenerator:
             is_day_by_time = icon.endswith("d")
         return is_day_by_time and cloud < 70
 
-    # ---------- 图标加载（详细日志）----------
-    def _load_icon(self, icon_code: str, size: int = 100) -> Optional[Image.Image]:
+    # ---------- SVG 图标加载并动态改色 ----------
+    def _load_icon(self, icon_code: str, size: int, color_hex: str) -> Optional[Image.Image]:
+        """加载 SVG 图标，修改填充色，转换为 PIL Image"""
         if not icon_code:
-            logger.debug("图标代码为空，跳过加载")
             return None
 
         svg_path = os.path.join(self.icon_dir, f"{icon_code}.svg")
-        png_path = os.path.join(self.icon_dir, f"{icon_code}.png")
-        logger.debug(f"尝试加载图标: {icon_code}, 路径: {svg_path} / {png_path}")
-
-        icon_path = None
-        if os.path.exists(svg_path):
-            icon_path = svg_path
-            logger.debug(f"找到 SVG 图标: {svg_path}")
-        elif os.path.exists(png_path):
-            icon_path = png_path
-            logger.debug(f"找到 PNG 图标: {png_path}")
-        else:
-            logger.warning(f"图标文件不存在: {icon_code} (目录: {self.icon_dir})")
+        if not os.path.exists(svg_path):
+            logger.warning(f"SVG 图标不存在: {svg_path}")
             return None
 
         try:
-            ext = os.path.splitext(icon_path)[1].lower()
-            if ext == '.svg':
-                try:
-                    import cairosvg
-                    png_bytes = cairosvg.svg2png(url=icon_path, output_width=size, output_height=size)
-                    icon = Image.open(io.BytesIO(png_bytes))
-                except ImportError:
-                    logger.error("cairosvg 未安装，无法加载 SVG 图标。请执行: pip install cairosvg")
-                    return None
-            else:
-                icon = Image.open(icon_path)
-                icon = icon.resize((size, size), Image.Resampling.LANCZOS)
+            # 读取 SVG 内容
+            with open(svg_path, 'r', encoding='utf-8') as f:
+                svg_content = f.read()
+
+            # 使用 xml.etree.ElementTree 解析并修改 fill 属性
+            # 注册 SVG 命名空间
+            ET.register_namespace('', "http://www.w3.org/2000/svg")
+            # 解析
+            root = ET.fromstring(svg_content)
+            # 递归修改所有元素的 fill 属性
+            def set_fill(element, color):
+                if 'fill' in element.attrib:
+                    element.set('fill', color)
+                for child in element:
+                    set_fill(child, color)
+            set_fill(root, color_hex)
+
+            # 转换为字符串
+            modified_svg = ET.tostring(root, encoding='unicode')
+            
+            # 使用 cairosvg 转为 PNG
+            import cairosvg
+            png_bytes = cairosvg.svg2png(bytestring=modified_svg.encode('utf-8'),
+                                         output_width=size, output_height=size)
+            icon = Image.open(io.BytesIO(png_bytes))
             if icon.mode != 'RGBA':
                 icon = icon.convert('RGBA')
             return icon
+        except ImportError:
+            logger.error("cairosvg 未安装，无法加载 SVG 图标。请执行: pip install cairosvg")
+            return None
         except Exception as e:
-            logger.error(f"加载图标异常 {icon_code}: {e}")
+            logger.error(f"加载 SVG 图标失败 {icon_code}: {e}")
             return None
 
     # ---------- 核心绘图 ----------
@@ -166,19 +166,21 @@ class WeatherImageGenerator:
         # 判断白天模式
         is_day_mode = self._is_daytime(weather_data)
 
-        # 根据模式设定左右背景色、字体颜色、分割线颜色
+        # 根据模式设定左右背景色、字体颜色、分割线颜色、图标颜色
         if is_day_mode:
             left_bg = (255, 217, 130)   # #FFD982
             right_bg = (94, 206, 246)   # #5ECEF6
             text_main = (0, 0, 0)
             text_secondary = (80, 80, 80)
             line_color = (191, 162, 97) # #BFA261
+            icon_color = "#000000"      # 黑色
         else:
             left_bg = (37, 57, 92)      # #25395C
             right_bg = (28, 42, 79)     # #1C2A4F
             text_main = (255, 255, 255)
             text_secondary = (200, 200, 200)
             line_color = (92, 107, 133) # #5C6B85
+            icon_color = "#FFFFFF"      # 白色
 
         # 分区
         right_width = width // 4
@@ -192,7 +194,7 @@ class WeatherImageGenerator:
         # 右侧大图标
         icon_code = weather_data.get("icon", "100")
         icon_size = 160
-        icon = self._load_icon(icon_code, size=icon_size)
+        icon = self._load_icon(icon_code, icon_size, icon_color)
         if icon:
             icon_x = right_x_start + (right_width - icon_size) // 2
             icon_y = (height - icon_size) // 2
@@ -230,7 +232,7 @@ class WeatherImageGenerator:
         draw.text((left_padding, temp_y_start + 85), range_text, fill=text_secondary, font=self.font_label)
 
         weather_text = weather_data.get("weather", "未知")
-        small_icon = self._load_icon(icon_code, size=40)
+        small_icon = self._load_icon(icon_code, 40, icon_color)
         if small_icon:
             img.paste(small_icon, (left_padding, temp_y_start + 120), small_icon)
         draw.text((left_padding + 50, temp_y_start + 128), weather_text, fill=text_main, font=self.font_weather)
@@ -289,7 +291,7 @@ class WeatherImageGenerator:
             moon_text_y = info_y_start + 2 * line_gap + 8
             draw.text((right_col_x, moon_text_y), f"月相: {moon_phase}", fill=text_main, font=self.font_moon)
             if moon_icon_code:
-                moon_icon = self._load_icon(moon_icon_code, size=32)
+                moon_icon = self._load_icon(moon_icon_code, 32, icon_color)
                 if moon_icon:
                     img.paste(moon_icon, (right_col_x + 80, moon_text_y - 6), moon_icon)
 
