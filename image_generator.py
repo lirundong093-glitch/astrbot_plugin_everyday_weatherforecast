@@ -8,7 +8,7 @@ from astrbot.api import logger
 
 
 class WeatherImageGenerator:
-    """天气图片生成器 - 左右分栏布局，昼夜配色"""
+    """天气图片生成器 - 左右分栏布局，动态昼夜配色"""
 
     DEFAULT_ICON_CODE = "100"
 
@@ -21,14 +21,14 @@ class WeatherImageGenerator:
             logger.info(f"已加载中文字体：{self.font_path}")
 
         # 预加载常用字号
-        self.font_temp_main = self._load_font(68)      # 大温度数字
-        self.font_temp_feels = self._load_font(24)     # 体感温度
-        self.font_city = self._load_font(32)           # 城市名
-        self.font_date = self._load_font(18)           # 年月日和时间
-        self.font_weather = self._load_font(22)        # 天气描述
-        self.font_label = self._load_font(18)          # 左侧信息标签
-        self.font_value = self._load_font(18)          # 左侧信息数值
-        self.font_moon = self._load_font(18)           # 月相字体（加大到18号）
+        self.font_temp_main = self._load_font(68)
+        self.font_temp_feels = self._load_font(24)
+        self.font_city = self._load_font(32)
+        self.font_date = self._load_font(18)
+        self.font_weather = self._load_font(22)
+        self.font_label = self._load_font(18)
+        self.font_value = self._load_font(18)
+        self.font_moon = self._load_font(18)
 
         # 图标目录
         self.icon_dir = os.path.expanduser("~/icons")
@@ -89,22 +89,51 @@ class WeatherImageGenerator:
         dirs = ["北", "东北", "东", "东南", "南", "西南", "西", "西北"]
         return dirs[round(deg / 45) % 8]
 
-    # ---------- 图标加载 (静默失败，返回 None) ----------
+    # ---------- 增强的昼夜判断 ----------
+    def _is_daytime(self, weather_data: Dict[str, Any]) -> bool:
+        """
+        判断当前是否为白天
+        优先使用日出/日落时间（如果有），否则根据图标代码
+        同时结合云量阈值：白天且云量<70 返回 True，否则返回 False
+        """
+        # 获取云量
+        cloud = weather_data.get("cloud", 0)
+        # 尝试使用日出日落判断
+        dt = weather_data.get("dt")
+        sys = weather_data.get("sys", {})
+        sunrise = sys.get("sunrise")
+        sunset = sys.get("sunset")
+        is_day_by_time = False
+        if dt and sunrise and sunset:
+            is_day_by_time = sunrise <= dt <= sunset
+        else:
+            icon = weather_data.get("icon", "")
+            is_day_by_time = icon.endswith("d")
+        # 最终结果：白天且云量<70
+        return is_day_by_time and cloud < 70
+
+    # ---------- 图标加载（详细日志）----------
     def _load_icon(self, icon_code: str, size: int = 100) -> Optional[Image.Image]:
-        """加载图标，失败返回 None（不再尝试默认图标）"""
+        """加载图标，返回 PIL Image，失败返回 None 并输出详细日志"""
         if not icon_code:
+            logger.debug(f"图标代码为空，跳过加载")
             return None
-        # 优先 SVG，其次 PNG
+
+        # 构建可能的路径
         svg_path = os.path.join(self.icon_dir, f"{icon_code}.svg")
         png_path = os.path.join(self.icon_dir, f"{icon_code}.png")
+        
+        logger.debug(f"尝试加载图标: {icon_code}, 搜索路径: SVG={svg_path}, PNG={png_path}")
+        
         icon_path = None
         if os.path.exists(svg_path):
             icon_path = svg_path
+            logger.debug(f"找到 SVG 图标: {svg_path}")
         elif os.path.exists(png_path):
             icon_path = png_path
-
-        if not icon_path:
-            # 静默失败，不打印警告（避免刷屏）
+            logger.debug(f"找到 PNG 图标: {png_path}")
+        else:
+            logger.warning(f"图标文件不存在: 未找到 {icon_code}.svg 或 {icon_code}.png 在目录 {self.icon_dir}")
             return None
 
         try:
@@ -114,27 +143,24 @@ class WeatherImageGenerator:
                     import cairosvg
                     png_bytes = cairosvg.svg2png(url=icon_path, output_width=size, output_height=size)
                     icon = Image.open(io.BytesIO(png_bytes))
+                    logger.debug(f"成功加载 SVG 图标: {icon_path}")
                 except ImportError:
-                    logger.error("cairosvg 未安装，无法加载 SVG 图标")
+                    logger.error("cairosvg 未安装，无法加载 SVG 图标。请执行: pip install cairosvg")
+                    return None
+                except Exception as e:
+                    logger.error(f"SVG 转换失败 {icon_path}: {e}")
                     return None
             else:
                 icon = Image.open(icon_path)
                 icon = icon.resize((size, size), Image.Resampling.LANCZOS)
+                logger.debug(f"成功加载 PNG 图标: {icon_path}")
 
             if icon.mode != 'RGBA':
                 icon = icon.convert('RGBA')
             return icon
         except Exception as e:
-            logger.error(f"加载图标失败 {icon_code}: {e}")
+            logger.error(f"加载图标异常 {icon_code}: {e}", exc_info=True)
             return None
-
-    # ---------- 昼夜判断 ----------
-    def _is_daytime(self, weather_data: Dict[str, Any]) -> bool:
-        icon = weather_data.get("icon", "")
-        if icon and icon[-1] in ('d', 'n'):
-            return icon[-1] == 'd'
-        # 默认白天
-        return True
 
     # ---------- 核心绘图 ----------
     def generate(self, weather_data: Dict[str, Any]) -> bytes:
@@ -142,27 +168,35 @@ class WeatherImageGenerator:
         img = Image.new("RGB", (width, height), color=(255, 255, 255))
         draw = ImageDraw.Draw(img)
 
-        # 昼夜配色
-        is_day = self._is_daytime(weather_data)
-        if is_day:
-            bg_color = (250, 250, 250)      # 白天背景：浅灰白
-            text_main = (0, 0, 0)           # 黑色
-            text_secondary = (80, 80, 80)   # 深灰
-            line_color = (200, 200, 200)    # 浅灰线
+        # 判断白天模式（白天且云量<70）
+        is_day_mode = self._is_daytime(weather_data)
+        
+        # 根据模式设定左右背景色、字体颜色、分割线颜色
+        if is_day_mode:
+            left_bg = (255, 217, 130)   # #FFD982
+            right_bg = (94, 206, 246)   # #5ECEF6
+            text_main = (0, 0, 0)       # 黑色
+            text_secondary = (80, 80, 80)
+            line_color = (191, 162, 97) # #BFA261
         else:
-            bg_color = (20, 30, 60)         # 夜晚背景：深蓝灰
-            text_main = (255, 255, 255)     # 白色
-            text_secondary = (200, 200, 200) # 浅灰
-            line_color = (100, 100, 150)    # 暗蓝线
+            left_bg = (37, 57, 92)      # #25395C
+            right_bg = (28, 42, 79)     # #1C2A4F
+            text_main = (255, 255, 255) # 白色
+            text_secondary = (200, 200, 200)
+            line_color = (92, 107, 133) # #5C6B85
 
-        draw.rectangle([(0, 0), (width, height)], fill=bg_color)
-
-        # 分区：右侧占1/4
+        # 绘制左右背景
         right_width = width // 4
         left_width = width - right_width
         right_x_start = left_width
+        
+        draw.rectangle([(0, 0), (left_width, height)], fill=left_bg)
+        draw.rectangle([(right_x_start, 0), (width, height)], fill=right_bg)
 
-        # 右侧：大图标（垂直居中）
+        # 右侧分隔线
+        draw.line([(right_x_start, 0), (right_x_start, height)], fill=line_color, width=2)
+
+        # 右侧：大图标
         icon_code = weather_data.get("icon", "100")
         icon_size = 160
         icon = self._load_icon(icon_code, size=icon_size)
@@ -170,10 +204,8 @@ class WeatherImageGenerator:
             icon_x = right_x_start + (right_width - icon_size) // 2
             icon_y = (height - icon_size) // 2
             img.paste(icon, (icon_x, icon_y), icon)
-        # 如果图标加载失败，右侧留空（不报错）
-
-        # 右侧分隔线
-        draw.line([(right_x_start, 0), (right_x_start, height)], fill=line_color, width=2)
+        else:
+            logger.warning(f"无法加载右侧大图标: {icon_code}，右侧将留空")
 
         # 左侧布局
         left_padding = 25
@@ -186,7 +218,6 @@ class WeatherImageGenerator:
         date_str = now.strftime("%Y年%m月%d日 %H:%M")
         draw.text((left_padding, 58), date_str, fill=text_secondary, font=self.font_date)
 
-        # 分隔线1
         draw.line([(left_padding, 90), (left_width - left_padding, 90)], fill=line_color, width=1)
 
         # ----- 第2部分：温度区域 -----
@@ -211,7 +242,6 @@ class WeatherImageGenerator:
             img.paste(small_icon, (left_padding, temp_y_start + 120), small_icon)
         draw.text((left_padding + 50, temp_y_start + 128), weather_text, fill=text_main, font=self.font_weather)
 
-        # 分隔线2
         line_y = temp_y_start + 175
         draw.line([(left_padding, line_y), (left_width - left_padding, line_y)], fill=line_color, width=1)
 
@@ -219,7 +249,6 @@ class WeatherImageGenerator:
         info_y_start = line_y + 20
         line_gap = 30
 
-        # 提取数据
         wind_dir = weather_data.get("wind_dir", "")
         wind_speed = weather_data.get("wind_speed", 0)
         wind_deg = weather_data.get("wind_deg", 0)
@@ -237,7 +266,6 @@ class WeatherImageGenerator:
         moon_phase = weather_data.get("moon_phase", "")
         moon_icon_code = weather_data.get("moon_icon", "")
 
-        # 左列信息
         left_col_items = [
             ("风力", f"{wind_speed:.0f} km/h ({wind_dir})" if wind_dir else f"{wind_speed:.0f} km/h"),
             ("湿度", f"{humidity}%"),
@@ -247,7 +275,6 @@ class WeatherImageGenerator:
             ("AQI", f"{aqi} {aqi_category}" if aqi else "无数据"),
         ]
 
-        # 右列信息
         right_col_items = [
             ("日出", sunrise if sunrise else "--:--"),
             ("日落", sunset if sunset else "--:--"),
@@ -265,7 +292,6 @@ class WeatherImageGenerator:
             draw.text((right_col_x, y), f"{label}:", fill=text_main, font=self.font_label)
             draw.text((right_col_x + 55, y), value, fill=text_main, font=self.font_value)
 
-        # 月相（使用18号字体）
         if moon_phase:
             moon_text_y = info_y_start + 2 * line_gap + 8
             draw.text((right_col_x, moon_text_y), f"月相: {moon_phase}", fill=text_main, font=self.font_moon)
@@ -273,8 +299,6 @@ class WeatherImageGenerator:
                 moon_icon = self._load_icon(moon_icon_code, size=32)
                 if moon_icon:
                     img.paste(moon_icon, (right_col_x + 80, moon_text_y - 6), moon_icon)
-
-        # 注意：底部装饰线已删除（根据要求）
 
         # 转换为 bytes
         img_bytes = io.BytesIO()
