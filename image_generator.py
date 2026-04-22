@@ -8,7 +8,9 @@ from astrbot.api import logger
 
 
 class WeatherImageGenerator:
-    """天气图片生成器 - 重构版 (左右分栏，信息结构化布局)"""
+    """天气图片生成器 - 左右分栏布局，昼夜配色"""
+
+    DEFAULT_ICON_CODE = "100"
 
     def __init__(self):
         # 跨平台字体搜索
@@ -21,13 +23,13 @@ class WeatherImageGenerator:
 
         # 预加载常用字号
         self.font_temp_main = self._load_font(68)      # 大温度数字
-        self.font_temp_feels = self._load_font(22)     # 体感温度
-        self.font_city = self._load_font(28)           # 城市名
-        self.font_date = self._load_font(16)           # 年月日和时间
-        self.font_weather = self._load_font(20)        # 天气描述
-        self.font_label = self._load_font(16)          # 左侧信息标签
-        self.font_value = self._load_font(16)          # 左侧信息数值
-        self.font_small = self._load_font(14)          # 月相等小字
+        self.font_temp_feels = self._load_font(24)     # 体感温度
+        self.font_city = self._load_font(32)           # 城市名
+        self.font_date = self._load_font(18)           # 年月日和时间
+        self.font_weather = self._load_font(22)        # 天气描述
+        self.font_label = self._load_font(18)          # 左侧信息标签
+        self.font_value = self._load_font(18)          # 左侧信息数值
+        self.font_small = self._load_font(16)          # 月相等小字
 
         # 图标目录 (用户下载的和风天气官方图标位置，支持 SVG)
         self.icon_dir = os.path.expanduser("~/icons")
@@ -88,37 +90,31 @@ class WeatherImageGenerator:
         dirs = ["北", "东北", "东", "东南", "南", "西南", "西", "西北"]
         return dirs[round(deg / 45) % 8]
 
-    def _format_time(self, timestamp: int, tz_offset: int) -> str:
-        if not timestamp:
-            return "--:--"
-        from datetime import timezone, timedelta
-        tz = timezone(timedelta(seconds=tz_offset))
-        dt = datetime.fromtimestamp(timestamp, tz)
-        if platform.system() == "Windows":
-            return dt.strftime("%#H:%M")
-        return dt.strftime("%-H:%M")
-
     # ---------- 图标加载 (支持 SVG 和 PNG) ----------
     def _get_icon_path(self, icon_code: str) -> str:
-        """获取图标文件路径，优先 SVG，其次 PNG。"""
+        """获取图标文件路径，优先 SVG，其次 PNG。如果不存在则返回空字符串"""
         if not icon_code:
-            icon_code = "100"
-        # 优先 SVG
+            icon_code = self.DEFAULT_ICON_CODE
         svg_path = os.path.join(self.icon_dir, f"{icon_code}.svg")
         if os.path.exists(svg_path):
             return svg_path
-        # 其次 PNG
         png_path = os.path.join(self.icon_dir, f"{icon_code}.png")
         if os.path.exists(png_path):
             return png_path
         return ""
 
     def _load_icon(self, icon_code: str, size: int = 100) -> Optional[Image.Image]:
-        """加载并缩放图标（支持 SVG 和 PNG）。"""
+        """加载并缩放图标，失败时尝试加载默认图标"""
         icon_path = self._get_icon_path(icon_code)
         if not icon_path:
-            logger.warning(f"图标文件不存在: {icon_code}")
-            return None
+            logger.warning(f"图标文件不存在: {icon_code}，尝试加载默认图标 {self.DEFAULT_ICON_CODE}")
+            default_path = self._get_icon_path(self.DEFAULT_ICON_CODE)
+            if default_path:
+                icon_path = default_path
+                icon_code = self.DEFAULT_ICON_CODE
+            else:
+                logger.error(f"默认图标 {self.DEFAULT_ICON_CODE} 也不存在，无法显示天气图标")
+                return None
 
         try:
             ext = os.path.splitext(icon_path)[1].lower()
@@ -133,13 +129,22 @@ class WeatherImageGenerator:
             else:
                 icon = Image.open(icon_path)
                 icon = icon.resize((size, size), Image.Resampling.LANCZOS)
-            
+
             if icon.mode != 'RGBA':
                 icon = icon.convert('RGBA')
             return icon
         except Exception as e:
             logger.error(f"加载图标失败 {icon_code}: {e}")
             return None
+
+    # ---------- 昼夜判断 ----------
+    def _is_daytime(self, weather_data: Dict[str, Any]) -> bool:
+        """根据天气数据中的图标代码判断昼夜（带d为白天，n为夜晚）"""
+        icon = weather_data.get("icon", "")
+        if icon and icon[-1] in ('d', 'n'):
+            return icon[-1] == 'd'
+        # 兜底：假设白天
+        return True
 
     # ---------- 核心绘图 ----------
     def generate(self, weather_data: Dict[str, Any]) -> bytes:
@@ -151,26 +156,27 @@ class WeatherImageGenerator:
         # 判断昼夜，决定文字颜色 (白天黑色，夜晚白色)
         is_day = self._is_daytime(weather_data)
         text_main = (20, 20, 20) if is_day else (240, 240, 240)
-        text_secondary = (60, 60, 60) if is_day else (200, 200, 200)
+        text_secondary = (80, 80, 80) if is_day else (200, 200, 200)
 
-        # 背景：根据昼夜使用纯色背景 (白天浅色，夜晚深色)
+        # 背景色：白天浅灰，夜晚深蓝
         bg_color = (245, 245, 245) if is_day else (28, 42, 79)
         draw.rectangle([(0, 0), (width, height)], fill=bg_color)
 
         # 分隔线颜色
-        line_color = (200, 200, 200) if is_day else (100, 100, 100)
+        line_color = (180, 180, 180) if is_day else (100, 100, 150)
 
         # ---------- 分区定义 ----------
-        right_width = int(width / 4)  # 右侧占 1/4，即 200px
+        right_width = width // 4  # 右侧占 1/4，即 200px
         left_width = width - right_width  # 左侧占 600px
-        right_x_start = left_width  # 600px
+        right_x_start = left_width  # 右侧起始x坐标
 
         # ---------- 右侧：今日天气大图标 (居中) ----------
         icon_code = weather_data.get("icon", "100")
-        icon = self._load_icon(icon_code, size=140)
+        icon_size = 160  # 大图标尺寸
+        icon = self._load_icon(icon_code, size=icon_size)
         if icon:
-            icon_x = right_x_start + (right_width - 140) // 2
-            icon_y = (height - 140) // 2
+            icon_x = right_x_start + (right_width - icon_size) // 2
+            icon_y = (height - icon_size) // 2
             img.paste(icon, (icon_x, icon_y), icon)
         else:
             logger.warning(f"无法加载天气图标: {icon_code}")
@@ -179,59 +185,54 @@ class WeatherImageGenerator:
         draw.line([(right_x_start, 0), (right_x_start, height)], fill=line_color, width=2)
 
         # ---------- 左侧布局参数 ----------
-        left_padding = 20
-        content_width = left_width - 2 * left_padding  # 560px
+        left_padding = 25
+        content_width = left_width - 2 * left_padding
 
-        # ---------- 左侧 - 第1部分：城市、日期 ----------
-        # 左上：城市名称
+        # ---------- 第1部分：城市、日期 ----------
         city = weather_data.get("city", "未知")
         draw.text((left_padding, 20), city, fill=text_main, font=self.font_city)
 
-        # 城市下方：年月日和时间
         now = datetime.now()
         date_str = now.strftime("%Y年%m月%d日 %H:%M")
-        draw.text((left_padding, 55), date_str, fill=text_secondary, font=self.font_date)
+        draw.text((left_padding, 58), date_str, fill=text_secondary, font=self.font_date)
 
         # 第1部分分隔线
-        draw.line([(left_padding, 85), (left_width - left_padding, 85)], fill=line_color, width=1)
+        draw.line([(left_padding, 90), (left_width - left_padding, 90)], fill=line_color, width=1)
 
-        # ---------- 左侧 - 第2部分：温度 ----------
-        temp_y_start = 105
+        # ---------- 第2部分：温度区域 ----------
+        temp_y_start = 110
+        # 实时温度（最大）
         temp = weather_data.get("temperature", 0)
         temp_str = f"{temp:.0f}°" if temp == int(temp) else f"{temp:.1f}°"
         draw.text((left_padding, temp_y_start), temp_str, fill=text_main, font=self.font_temp_main)
 
-        # 实时温度右侧：体感温度 (较小)
+        # 体感温度（右侧较小）
         feels = weather_data.get("feels_like", 0)
         feels_str = f"体感 {feels:.0f}°" if feels == int(feels) else f"体感 {feels:.1f}°"
-        feels_x = left_padding + 120
-        draw.text((feels_x, temp_y_start + 25), feels_str, fill=text_secondary, font=self.font_temp_feels)
+        feels_x = left_padding + 130
+        draw.text((feels_x, temp_y_start + 28), feels_str, fill=text_secondary, font=self.font_temp_feels)
 
-        # 温度下方：今日最高最低温度
+        # 今日最高最低温度
         temp_max = weather_data.get("temp_max", 0)
         temp_min = weather_data.get("temp_min", 0)
         range_text = f"↑{temp_max:.0f}°  ↓{temp_min:.0f}°"
-        draw.text((left_padding, temp_y_start + 80), range_text, fill=text_secondary, font=self.font_label)
+        draw.text((left_padding, temp_y_start + 85), range_text, fill=text_secondary, font=self.font_label)
 
-        # 第2部分分隔线
-        draw.line([(left_padding, 215), (left_width - left_padding, 215)], fill=line_color, width=1)
-
-        # ---------- 左侧 - 第3部分：天气状况 (含小图标) ----------
-        weather_y_start = 235
-        # 小号实时天气图标 (40x40)
+        # 今日天气描述（带小图标）
+        weather_text = weather_data.get("weather", "未知")
+        # 加载小图标 (40x40)
         small_icon = self._load_icon(icon_code, size=40)
         if small_icon:
-            img.paste(small_icon, (left_padding, weather_y_start), small_icon)
-        # 实时天气状况文字
-        weather_text = weather_data.get("weather", "未知")
-        draw.text((left_padding + 50, weather_y_start + 8), weather_text, fill=text_main, font=self.font_weather)
+            img.paste(small_icon, (left_padding, temp_y_start + 120), small_icon)
+        draw.text((left_padding + 50, temp_y_start + 128), weather_text, fill=text_main, font=self.font_weather)
 
-        # 第3部分分隔线
-        draw.line([(left_padding, 290), (left_width - left_padding, 290)], fill=line_color, width=1)
+        # 第2部分分隔线
+        line_y = temp_y_start + 175
+        draw.line([(left_padding, line_y), (left_width - left_padding, line_y)], fill=line_color, width=1)
 
-        # ---------- 左侧 - 第4部分：两列信息 ----------
-        info_y_start = 310
-        line_gap = 28
+        # ---------- 第3部分：两列信息 ----------
+        info_y_start = line_y + 20
+        line_gap = 30
 
         # 提取数据
         wind_dir = weather_data.get("wind_dir", "")
@@ -239,6 +240,7 @@ class WeatherImageGenerator:
         wind_deg = weather_data.get("wind_deg", 0)
         if not wind_dir and wind_deg:
             wind_dir = self._wind_direction(wind_deg)
+
         humidity = weather_data.get("humidity", 0)
         cloud = weather_data.get("cloud", 0)
         uv = weather_data.get("uv_index", 0)
@@ -257,7 +259,7 @@ class WeatherImageGenerator:
             ("云量", f"{cloud}%"),
             ("紫外线", str(uv)),
             ("降水量", f"{precip} mm"),
-            ("AQI", f"{aqi} ({aqi_category})" if aqi else "无数据"),
+            ("AQI", f"{aqi} {aqi_category}" if aqi else "无数据"),
         ]
 
         # 右列信息
@@ -271,26 +273,25 @@ class WeatherImageGenerator:
         for i, (label, value) in enumerate(left_col_items):
             y = info_y_start + i * line_gap
             draw.text((left_col_x, y), f"{label}:", fill=text_main, font=self.font_label)
-            draw.text((left_col_x + 60, y), value, fill=text_main, font=self.font_value)
+            draw.text((left_col_x + 70, y), value, fill=text_main, font=self.font_value)
 
         # 绘制右列
-        right_col_x = left_padding + 220
+        right_col_x = left_padding + 250
         for i, (label, value) in enumerate(right_col_items):
             y = info_y_start + i * line_gap
             draw.text((right_col_x, y), f"{label}:", fill=text_main, font=self.font_label)
-            draw.text((right_col_x + 50, y), value, fill=text_main, font=self.font_value)
+            draw.text((right_col_x + 55, y), value, fill=text_main, font=self.font_value)
 
         # 右列下方：月相名称 + 月相图标
         if moon_phase:
-            moon_text_y = info_y_start + 2 * line_gap + 10
+            moon_text_y = info_y_start + 2 * line_gap + 8
             draw.text((right_col_x, moon_text_y), f"月相: {moon_phase}", fill=text_main, font=self.font_small)
-            # 月相图标 (30x30)
             if moon_icon_code:
-                moon_icon = self._load_icon(moon_icon_code, size=30)
+                moon_icon = self._load_icon(moon_icon_code, size=32)
                 if moon_icon:
-                    img.paste(moon_icon, (right_col_x + 70, moon_text_y - 5), moon_icon)
+                    img.paste(moon_icon, (right_col_x + 80, moon_text_y - 6), moon_icon)
 
-        # ---------- 底部装饰线 ----------
+        # 底部装饰线（可选）
         draw.line([(left_padding, height - 15), (left_width - left_padding, height - 15)], fill=line_color, width=1)
 
         # 转换为 bytes
@@ -298,14 +299,3 @@ class WeatherImageGenerator:
         img.save(img_bytes, format="PNG")
         img_bytes.seek(0)
         return img_bytes.getvalue()
-
-    def _is_daytime(self, data: Dict[str, Any]) -> bool:
-        """判断当前是否为白天"""
-        dt = data.get("dt")
-        sys = data.get("sys", {})
-        sunrise = sys.get("sunrise")
-        sunset = sys.get("sunset")
-        if dt and sunrise and sunset:
-            return sunrise <= dt <= sunset
-        icon = data.get("icon", "")
-        return icon.endswith("d")
