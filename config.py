@@ -24,6 +24,7 @@ class PluginConfig:
         self.default_city = user_config.get("default_city") or defaults.get("default_city", "北京")
         self.daily_push_time = user_config.get("daily_push_time") or defaults.get("daily_push_time", "08:00")
         self.whitelist_groups = user_config.get("whitelist_groups") or defaults.get("whitelist_groups", [])
+        self.holiday_cache_enabled = user_config.get("holiday_cache_enabled") or defaults.get("holiday_cache_enabled", True)
 
         # LLM 配置
         self.llm_enabled = user_config.get("llm_enabled")
