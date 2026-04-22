@@ -307,11 +307,10 @@ class WeatherImageGenerator:
 
         # 月相部分：文字在上，图标在下，与上一项的间距为 line_gap
         if moon_phase:
-            # 月相文字位置：日出日落之后 + line_gap
+            char_width = draw.textlength("月", font=self.font_moon)
             moon_text_y = info_y_start + len(right_col_items) * line_gap
             draw.text((right_col_x, moon_text_y), f"月相:  {moon_phase}", fill=text_main, font=self.font_moon)
             
-            # 月相图标放在文字下方，距离为 line_gap 的一半（避免过于拥挤），图标大小 32x32
             if moon_icon_code:
                 moon_icon = self._load_icon(moon_icon_code, 32, icon_color, "月相图标")
                 if moon_icon_code:
