@@ -117,13 +117,11 @@ class WeatherPlugin(Star):
                 logger.warning("[DailyPush] LLM 生成天气指南失败，将仅发送天气图片")
 
         # 获取可用的平台实例
-        platforms = self.context.platform_manager.get_platforms()
-        if not platforms:
-            logger.error("[DailyPush] 未找到任何已连接的平台实例，无法发送消息")
+        platform = self.context.get_platform("aiocqhttp")
+        if not platform:
+            logger.error("[DailyPush] 未找到 aiocqhttp 平台实例，无法发送消息")
             return
 
-        # 使用第一个可用平台发送消息（如果你的机器人连接了多个平台，可能需要更精细的筛选）
-        platform = platforms[0]
         platform_name = platform.meta().name
         logger.info(f"[DailyPush] 使用平台: {platform_name}")
 
@@ -138,7 +136,6 @@ class WeatherPlugin(Star):
                 if guide_text:
                     chain.append(Comp.Plain(f"\n\n📋 **今日天气指南**\n{guide_text}"))
 
-                # 正确调用：使用平台实例的 send_group_msg 方法
                 await platform.send_group_msg(str(group_id), chain)
                 success_count += 1
                 logger.info(f"[DailyPush] ✅ 成功向群 {group_id} 发送推送")
