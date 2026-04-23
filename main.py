@@ -120,10 +120,14 @@ class WeatherPlugin(Star):
                 logger.warning("[DailyPush] LLM 生成天气指南失败，将仅发送天气图片")
 
         # 4. 向白名单群发送推送
+        PLATFORM_NAME = "aiocqhttp"
+        MESSAGE_TYPE = "group"
+        
         success_count = 0
         for group_id in self.config.whitelist_groups:
             try:
                 logger.info(f"[DailyPush] 正在向群 {group_id} 发送推送...")
+                unified_origin = f"{PLATFORM_NAME}:{MESSAGE_TYPE}:{group_id}"
                 chain = [
                     Comp.Plain(f"☀️ 每日天气预报 - {self.config.default_city}"),
                     Comp.Image.fromBytes(image_bytes)
@@ -131,7 +135,7 @@ class WeatherPlugin(Star):
                 if guide_text:
                     chain.append(Comp.Plain(f"\n\n📋 **今日天气指南**\n{guide_text}"))
 
-                await self.context.send_message(group_id, chain)
+                await self.context.send_message(unified_origin, chain)
                 success_count += 1
                 logger.info(f"[DailyPush] ✅ 成功向群 {group_id} 发送推送")
                 await asyncio.sleep(0.5)
