@@ -92,6 +92,7 @@ class LLMGuideGenerator:
         wind_speed = weather_data.get("wind_speed", 0)
         uv_index = weather_data.get("uv_index", 0)
         aqi = weather_data.get("aqi", "")
+        precip = weather_data.get("precip", "")
         aqi_category = weather_data.get("aqi_category", "")
 
         # 提取舒适度和花粉过敏指数
@@ -125,6 +126,7 @@ class LLMGuideGenerator:
 相对湿度：{humidity}%
 风向风速：{wind_dir} {wind_speed} km/h
 紫外线强度：{uv_index}
+今日降水量：{precip} mm
 空气质量：{aqi} ({aqi_category})
 
 其他生活指数参考：
