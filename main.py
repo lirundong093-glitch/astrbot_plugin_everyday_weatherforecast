@@ -1,6 +1,7 @@
 import asyncio
 import os
 import json
+import tempfile
 from datetime import datetime
 from typing import Optional
 
@@ -123,14 +124,19 @@ class WeatherPlugin(Star):
         # 4. 向白名单群发送推送
         PLATFORM_NAME = "Lucy"
         MESSAGE_TYPE = "GroupMessage"
-        
         success_count = 0
+
+        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
+            tmp_file.write(image_bytes)
+            tmp_path = tmp_file.name
+            
         for group_id in self.config.whitelist_groups:
             try:
                 logger.info(f"[DailyPush] 正在向群 {group_id} 发送推送...")
                 unified_origin = f"{PLATFORM_NAME}:{MESSAGE_TYPE}:{group_id}"
-                message_chain = MessageChain().message(f"☀️ 每日天气预报 - {self.config.default_city}")
-                message_chain = message_chain.image_bytes(image_bytes) # 从内存中的字节流发送图片
+                message_chain = MessageChain() \
+                    .message(f"☀️ 每日天气预报 - {self.config.default_city}") \
+                    .file_image(tmp_path)  # 传入临时文件路径
                 
                 if guide_text:
                     message_chain = message_chain.message(f"\n\n📋 **今日天气指南**\n{guide_text}")
