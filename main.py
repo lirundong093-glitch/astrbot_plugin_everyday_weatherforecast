@@ -109,22 +109,10 @@ class WeatherPlugin(Star):
             if not guide_text:
                 logger.warning("[DailyPush] LLM 生成天气指南失败，将仅发送天气图片")
 
-        # 获取可用的平台实例（用于主动发送群消息）
-        platform = None
-        try:
-            # 获取当前已连接的所有平台
-            platforms = self.context.platform_manager.get_platforms()
-            if platforms:
-                platform = platforms[0]  # 使用第一个可用平台
-                logger.info(f"[DailyPush] 使用平台: {platform.meta().name}")
-            else:
-                logger.error("[DailyPush] 未找到任何已连接的平台实例，无法发送消息")
-                return
-        except Exception as e:
-            logger.error(f"[DailyPush] 获取平台实例失败: {e}", exc_info=True)
-            return
-
+        # 平台名称，与适配器名称一致
+        platform_name = "aiohttp"
         success_count = 0
+
         for group_id in self.config.whitelist_groups:
             try:
                 logger.info(f"[DailyPush] 正在向群 {group_id} 发送推送...")
@@ -135,8 +123,7 @@ class WeatherPlugin(Star):
                 if guide_text:
                     chain.append(Comp.Plain(f"\n\n📋 **今日天气指南**\n{guide_text}"))
 
-                # 使用平台实例发送群消息
-                await platform.send_group_msg(str(group_id), chain)
+                await self.send_group_msg(platform_name, str(group_id), chain)
                 success_count += 1
                 logger.info(f"[DailyPush] ✅ 成功向群 {group_id} 发送推送")
                 await asyncio.sleep(0.5)
@@ -144,21 +131,6 @@ class WeatherPlugin(Star):
                 logger.error(f"[DailyPush] ❌ 向群 {group_id} 发送失败: {e}", exc_info=True)
 
         logger.info(f"[DailyPush] 推送完成，成功发送 {success_count}/{len(self.config.whitelist_groups)} 个群")
-
-        # 向白名单群聊发送
-        for group_id in self.config.whitelist_groups:
-            try:
-                chain = [
-                    Comp.Plain(f"☀️ 每日天气预报 - {self.config.default_city}"),
-                    Comp.Image.fromBytes(image_bytes)
-                ]
-                if guide_text:
-                    chain.append(Comp.Plain(f"\n\n📋 **今日天气指南**\n{guide_text}"))
-
-                await self.context.send_message(group_id, chain)
-                await asyncio.sleep(0.5)
-            except Exception as e:
-                logger.error(f"向群 {group_id} 发送失败: {e}")
 
     @filter.command("weather")
     async def weather(self, event: AstrMessageEvent):
