@@ -17,6 +17,9 @@
 - **节假日检测联动**：结合节假日数据，AI 指南会融入节日氛围提示（需开启 LLM）。
 - **灵活配置**：支持通过聊天指令动态修改配置，无需重启机器人。
 
+## 生成图片示例
+![image_to_show](https://github.com/lirundong093-glitch/astrbot_plugin_everyday_weatherforecast/blob/main/image_to_show.png?raw=true)
+
 ## 📥 安装与配置
 
 1. 将插件放入 AstrBot 的 `addons` 目录。
