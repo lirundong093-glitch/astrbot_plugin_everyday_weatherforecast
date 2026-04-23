@@ -212,7 +212,7 @@ class WeatherImageGenerator:
         is_day_mode = self._is_daytime(weather_data)
 
         if is_day_mode:
-            left_bg = (251, 204, 122)
+            left_bg = (225, 214, 152)
             right_bg = (96, 206, 241)
             text_main = (0, 0, 0)
             text_secondary = (80, 80, 80)
