@@ -121,7 +121,7 @@ class WeatherPlugin(Star):
 
         # 4. 向白名单群发送推送
         PLATFORM_NAME = "aiochttp"
-        MESSAGE_TYPE = "Groupmessage"
+        MESSAGE_TYPE = "GroupMessage"
         
         success_count = 0
         for group_id in self.config.whitelist_groups:
