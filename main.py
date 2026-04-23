@@ -122,7 +122,7 @@ class WeatherPlugin(Star):
                 logger.warning("[DailyPush] LLM 生成天气指南失败，将仅发送天气图片")
 
         # 4. 向白名单群发送推送
-        PLATFORM_NAME = "Lucy"
+        PLATFORM_NAME = self.config.platform_name
         MESSAGE_TYPE = "GroupMessage"
         success_count = 0
 
@@ -331,6 +331,11 @@ class WeatherPlugin(Star):
             self.holiday_checker.enabled = enabled
             msg = f"✅ 节假日功能已{'开启' if enabled else '关闭'}"
 
+        elif key == "platform_name":
+            user_config["platform_name"] = value
+            self.config.platform_name = value
+            msg = f"✅ 平台名称已设置为: {value}"
+        
         else:
             yield event.plain_result(f"❌ 未知配置项: {key}")
             return
