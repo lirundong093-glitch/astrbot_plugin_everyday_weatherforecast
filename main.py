@@ -142,7 +142,6 @@ class WeatherPlugin(Star):
                 if guide_text:
                     await self.context.send_message(unified_origin, MessageChain().message(guide_text))
 
-                await self.context.send_message(unified_origin, message_chain)
                 success_count += 1
                 logger.info(f"[DailyPush] ✅ 成功向群 {group_id} 发送推送")
                 await asyncio.sleep(0.5)
