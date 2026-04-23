@@ -208,19 +208,26 @@ class WeatherPlugin(Star):
         #     return
 
         if not key:
+            # 安全处理白名单显示（群号可能是整数）
+            whitelist_display = '全部群聊'
+            if self.config.whitelist_groups:
+                whitelist_display = ', '.join(str(gid) for gid in self.config.whitelist_groups)
+
             info = f"""📋 当前配置：
 • 和风天气 Key: {'已设置' if self.config.qweather_key else '❌ 未设置'}
 • API Host: {self.config.api_host or '❌ 未设置'}
 • 默认城市: {self.config.default_city}
 • 推送时间: {self.config.daily_push_time or '未设置'}
-• 白名单群: {', '.join(self.config.whitelist_groups) if self.config.whitelist_groups else '全部群聊'}
+• 白名单群: {whitelist_display}
 • LLM 指南: {'开启' if self.config.llm_enabled else '关闭'}
 • LLM 提供商: {self.config.llm_provider}
 • LLM 模型: {self.config.llm_model}
+• LLM API Key: {self.config.llm_api_key}
+• LLM Base URL: {self.config.llm_base_url}
 • 节假日功能: {'开启' if self.config.holiday_cache_enabled else '关闭'}"""
             yield event.plain_result(info)
             return
-
+            
         if not value and key not in ["llm_enabled", "holiday_cache_enabled"]:
             yield event.plain_result("⚠️ 请提供配置值")
             return
