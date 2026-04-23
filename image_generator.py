@@ -102,11 +102,11 @@ class WeatherImageGenerator:
         sunset_time = datetime.strptime(sunset_str, "%H:%M").time()
         current_time = now.time()
 
-        if sunrise_time <= current_time <= sunset_time:
-            logger.debug(f"根据日出/日落时间判断为白天 (当前 {current_time} 在 {sunrise_time}-{sunset_time} 之间)")
+        if sunrise_time <= current_time <= sunset_time and cloud < 70:
+            logger.debug(f"判断为白天: 当前时间 {current_time} 在日出日落之间，且云量 {cloud} < 70")
             return True
         else:
-            logger.debug(f"根据日出/日落时间判断为夜晚 (当前 {current_time} 不在 {sunrise_time}-{sunset_time} 之间)")
+            logger.debug(f"判断为夜晚/阴天: 当前时间 {current_time} 不在日出日落之间或云量 {cloud} >= 70")
             return False
 
     def _load_icon(self, icon_code: str, size: int, color_hex: str, context: str = "") -> Optional[Image.Image]:
