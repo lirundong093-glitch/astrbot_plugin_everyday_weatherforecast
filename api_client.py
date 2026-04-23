@@ -244,6 +244,7 @@ class QWeatherClient:
             "icon": now.get("icon", "100"),
             "weather": now.get("text", ""),
             "update_time": now_data.get("updateTime", ""),
+            "precip": float(today.get("precip", 0)),
             "temp_max": float(today.get("tempMax", 0)),
             "temp_min": float(today.get("tempMin", 0)),
             "sunrise": today.get("sunrise", ""),
