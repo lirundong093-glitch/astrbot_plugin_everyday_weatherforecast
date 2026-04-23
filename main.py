@@ -72,29 +72,32 @@ class WeatherPlugin(Star):
             return self.config.is_group_allowed(group_id)
         return True  # 私聊始终允许
 
-    async def _get_weather_image(self, city: str) -> Optional[bytes]:
-        """获取指定城市的天气图片（bytes）"""
-        if not self.config.qweather_key or not self.config.api_host:
-            logger.error("和风天气 API Key 或 API Host 未配置")
-            return None
-
-        weather_data = await self.api_client.get_complete_weather(city)
-        if not weather_data:
-            return None
-
-        return self.image_generator.generate(weather_data)
-
-    async def _daily_push(self):
+     async def _daily_push(self):
         """每日定时推送任务"""
+        logger.info(f"[DailyPush] ========== 开始执行每日天气推送 ==========")
+        logger.info(f"[DailyPush] 当前时间: {datetime.now()}")
+        logger.info(f"[DailyPush] 默认城市: {self.config.default_city}")
+        logger.info(f"[DailyPush] 白名单群列表: {self.config.whitelist_groups}")
+        logger.info(f"[DailyPush] LLM 启用状态: {self.config.llm_enabled}")
+
         if not self.config.qweather_key or not self.config.api_host:
-            logger.warning("和风天气 API Key 或 API Host 未配置，跳过定时推送")
+            logger.warning("[DailyPush] 和风天气 API Key 或 API Host 未配置，跳过定时推送")
             return
 
-        logger.info(f"开始每日天气推送，默认城市: {self.config.default_city}")
+        # 检查默认城市
+        if not self.config.default_city:
+            logger.error("[DailyPush] 默认城市未配置，无法推送")
+            return
+
+        # 检查白名单
+        if not self.config.whitelist_groups:
+            logger.warning("[DailyPush] 白名单群列表为空，将不会向任何群发送消息！")
+            # 可选择在此处发送一条测试消息给管理员，或直接返回
+            return
 
         weather_data = await self.api_client.get_complete_weather(self.config.default_city)
         if not weather_data:
-            logger.error("获取天气数据失败，定时推送中止")
+            logger.error("[DailyPush] 获取天气数据失败，定时推送中止")
             return
 
         image_bytes = self.image_generator.generate(weather_data)
@@ -107,7 +110,28 @@ class WeatherPlugin(Star):
                 weather_data=weather_data
             )
             if not guide_text:
-                logger.warning("LLM 生成天气指南失败，将仅发送天气图片")
+                logger.warning("[DailyPush] LLM 生成天气指南失败，将仅发送天气图片")
+
+        # 向白名单群聊发送
+        success_count = 0
+        for group_id in self.config.whitelist_groups:
+            try:
+                logger.info(f"[DailyPush] 正在向群 {group_id} 发送推送...")
+                chain = [
+                    Comp.Plain(f"☀️ 每日天气预报 - {self.config.default_city}"),
+                    Comp.Image.fromBytes(image_bytes)
+                ]
+                if guide_text:
+                    chain.append(Comp.Plain(f"\n\n📋 **今日天气指南**\n{guide_text}"))
+
+                await self.context.send_message(group_id, chain)
+                success_count += 1
+                logger.info(f"[DailyPush] ✅ 成功向群 {group_id} 发送推送")
+                await asyncio.sleep(0.5)
+            except Exception as e:
+                logger.error(f"[DailyPush] ❌ 向群 {group_id} 发送失败: {e}", exc_info=True)
+
+        logger.info(f"[DailyPush] 推送完成，成功发送 {success_count}/{len(self.config.whitelist_groups)} 个群")
 
         # 向白名单群聊发送
         for group_id in self.config.whitelist_groups:
@@ -159,6 +183,13 @@ class WeatherPlugin(Star):
         ]
         yield event.chain_result(chain)
 
+    @filter.command("weather_test_push")
+    async def weather_test_push(self, event: AstrMessageEvent):
+        """手动触发一次定时推送（调试用）"""
+        logger.info("[TestPush] 收到手动推送指令")
+        await self._daily_push()
+        yield event.plain_result("✅ 手动推送已执行，请查看日志")
+    
     @filter.command("weather_config")
     async def weather_config(self, event: AstrMessageEvent, key: str = None, value: str = None):
         """
@@ -303,8 +334,16 @@ class WeatherPlugin(Star):
 
     async def start(self):
         await super().start()
+        # 打印调度器状态
+        logger.info(f"[Main] 插件启动，当前推送时间配置: {self.config.daily_push_time}")
+        logger.info(f"[Main] 白名单群: {self.config.whitelist_groups}")
         self.scheduler.start()
-        logger.info("和风天气预报插件已启动")
+        # 启动后主动打印一下调度器中的任务
+        jobs = self.scheduler.scheduler.get_jobs()
+        logger.info(f"[Main] 调度器启动完成，当前任务数: {len(jobs)}")
+        for job in jobs:
+            logger.info(f"[Main] 任务 ID: {job.id}, 下次运行: {job.next_run_time}")
+        logger.info("[Main] 和风天气预报插件已启动")
 
     async def terminate(self):
         self.scheduler.shutdown()
