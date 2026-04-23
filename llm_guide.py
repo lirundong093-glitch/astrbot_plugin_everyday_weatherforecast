@@ -67,13 +67,13 @@ class LLMGuideGenerator:
             if days_until_saturday == 0:
                 rest_day_text = "今天是休息日！"
                 cheer_text = "好好享受这难得的放松时光吧 (◕‿◕)！"
-            elif days_until_saturaday == 5:
+            elif days_until_saturday == 5:
                 rest_day_text = f"今天是周一"
                 cheer_text = "新的一周开始了，让我们一起加油吧b(￣▽￣)d！"
-            elif days_until_saturaday == 4:
+            elif days_until_saturday == 4:
                 rest_day_text = f"今天是周二"
                 cheer_text = "怎么才周二？已经开始想念周末了(┬┬﹏┬┬)！"
-            elif days_until_saturaday == 3:
+            elif days_until_saturday == 3:
                 rest_day_text = f"今天是周三"
                 cheer_text = "工作日马上就要过去一半了，如果工作有点疲劳的话就休息一下吧(￣﹃￣)！"
             else:
