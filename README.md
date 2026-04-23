@@ -46,7 +46,7 @@
 | `llm_enabled` | 开关 AI 指南功能 | `true` / `false` |
 | `llm_provider` | LLM 供应商标识 | `openai` / `deepseek` |
 | `llm_api_key` | LLM 密钥 | `sk-xxxxxx` |
-| `llm_base_url` | LLM 接口地址 | `https://api.deepseek.com/v1` |
+| `llm_base_url` | LLM 接口地址 | `https://api.deepseek.com/chat/completions` |
 | `llm_model` | LLM 模型名称 | `deepseek-chat` |
 | `holiday_cache_enabled` | 开关节假日缓存 | `true` / `false` |
 
