@@ -8,6 +8,7 @@ import astrbot.api.message_components as Comp
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger
+from astrbot.api.platform import Platform
 
 from .config import PluginConfig
 from .api_client import QWeatherClient
@@ -84,15 +85,12 @@ class WeatherPlugin(Star):
             logger.warning("[DailyPush] 和风天气 API Key 或 API Host 未配置，跳过定时推送")
             return
 
-        # 检查默认城市
         if not self.config.default_city:
             logger.error("[DailyPush] 默认城市未配置，无法推送")
             return
 
-        # 检查白名单
         if not self.config.whitelist_groups:
             logger.warning("[DailyPush] 白名单群列表为空，将不会向任何群发送消息！")
-            # 可选择在此处发送一条测试消息给管理员，或直接返回
             return
 
         weather_data = await self.api_client.get_complete_weather(self.config.default_city)
@@ -102,7 +100,6 @@ class WeatherPlugin(Star):
 
         image_bytes = self.image_generator.generate(weather_data)
 
-        # 如果启用 LLM，生成天气指南
         guide_text = ""
         if self.config.llm_enabled and self.llm_generator:
             guide_text = await self.llm_generator.generate_guide(
@@ -112,7 +109,21 @@ class WeatherPlugin(Star):
             if not guide_text:
                 logger.warning("[DailyPush] LLM 生成天气指南失败，将仅发送天气图片")
 
-        # 向白名单群聊发送
+        # 获取可用的平台实例（用于主动发送群消息）
+        platform = None
+        try:
+            # 获取当前已连接的所有平台
+            platforms = self.context.platform_manager.get_platforms()
+            if platforms:
+                platform = platforms[0]  # 使用第一个可用平台
+                logger.info(f"[DailyPush] 使用平台: {platform.meta().name}")
+            else:
+                logger.error("[DailyPush] 未找到任何已连接的平台实例，无法发送消息")
+                return
+        except Exception as e:
+            logger.error(f"[DailyPush] 获取平台实例失败: {e}", exc_info=True)
+            return
+
         success_count = 0
         for group_id in self.config.whitelist_groups:
             try:
@@ -124,7 +135,8 @@ class WeatherPlugin(Star):
                 if guide_text:
                     chain.append(Comp.Plain(f"\n\n📋 **今日天气指南**\n{guide_text}"))
 
-                await self.context.send_message(group_id, chain)
+                # 使用平台实例发送群消息
+                await platform.send_group_msg(str(group_id), chain)
                 success_count += 1
                 logger.info(f"[DailyPush] ✅ 成功向群 {group_id} 发送推送")
                 await asyncio.sleep(0.5)
