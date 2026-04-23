@@ -116,10 +116,18 @@ class WeatherPlugin(Star):
             if not guide_text:
                 logger.warning("[DailyPush] LLM 生成天气指南失败，将仅发送天气图片")
 
-        # 平台名称，与适配器名称一致
-        platform_name = "aiohttp"
-        success_count = 0
+        # 获取可用的平台实例
+        platforms = self.context.platform_manager.get_platforms()
+        if not platforms:
+            logger.error("[DailyPush] 未找到任何已连接的平台实例，无法发送消息")
+            return
 
+        # 使用第一个可用平台发送消息（如果你的机器人连接了多个平台，可能需要更精细的筛选）
+        platform = platforms[0]
+        platform_name = platform.meta().name
+        logger.info(f"[DailyPush] 使用平台: {platform_name}")
+
+        success_count = 0
         for group_id in self.config.whitelist_groups:
             try:
                 logger.info(f"[DailyPush] 正在向群 {group_id} 发送推送...")
@@ -130,7 +138,8 @@ class WeatherPlugin(Star):
                 if guide_text:
                     chain.append(Comp.Plain(f"\n\n📋 **今日天气指南**\n{guide_text}"))
 
-                await self.send_group_msg(platform_name, str(group_id), chain)
+                # 正确调用：使用平台实例的 send_group_msg 方法
+                await platform.send_group_msg(str(group_id), chain)
                 success_count += 1
                 logger.info(f"[DailyPush] ✅ 成功向群 {group_id} 发送推送")
                 await asyncio.sleep(0.5)
