@@ -73,6 +73,13 @@ class WeatherPlugin(Star):
             return self.config.is_group_allowed(group_id)
         return True  # 私聊始终允许
 
+    async def _get_weather_image(self, city: str) -> Optional[bytes]:
+        """根据城市获取天气数据并生成图片字节流"""
+        weather_data = await self.api_client.get_complete_weather(city)
+        if not weather_data:
+            return None
+        return self.image_generator.generate(weather_data)
+
     async def _daily_push(self):
         """每日定时推送任务"""
         logger.info(f"[DailyPush] ========== 开始执行每日天气推送 ==========")
