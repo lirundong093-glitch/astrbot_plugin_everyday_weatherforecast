@@ -39,7 +39,7 @@
 
 | Key | 说明 | 取值示例 |
 | :--- | :--- | :--- |
-| `platfome_name` | astrbot平台名称 | Lucy` |
+| `platfome_name` | astrbot平台名称 | Lucy |
 | `qweather_key` | 和风天气 API Key | `abc123def456` |
 | `api_host` | 接口地址 | `devapi.qweather.com` |
 | `default_city` | 默认查询城市 | `北京` |
