@@ -54,7 +54,7 @@ class QWeatherClient:
         self.INDICES_URL = f"https://{self.api_host}/v7/indices/1d"
         logger.info(f"API 端点已构建，使用 Host: {self.api_host}")
 
-    INDICES_TYPES = "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16"
+    INDICES_TYPES = "1,3,5,6,7,8,9,10,11,14,15,16"
 
     async def _request(self, url: str, params: dict) -> Optional[Dict[str, Any]]:
         """统一请求，自动兼容和风标准格式与 TomTom 格式"""
