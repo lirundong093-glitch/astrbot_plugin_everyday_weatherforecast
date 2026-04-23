@@ -32,8 +32,12 @@ class WeatherScheduler:
         # 移除旧任务
         current_jobs = self.scheduler.get_jobs()
         logger.info(f"[Scheduler] 当前调度器中的任务数量: {len(current_jobs)}")
+        tz = pytz.timezone("Asia/Shanghai")
+        now = datetime.now(tz)
         for job in current_jobs:
-            logger.info(f"[Scheduler] 已有任务 ID: {job.id}, 下次运行: {job.next_run_time}")
+            # 使用 trigger 获取下次触发时间
+            next_time = job.trigger.get_next_fire_time(None, now)
+            logger.info(f"[Scheduler] 已有任务 ID: {job.id}, 下次运行: {next_time}")
 
         if self._job_id in [job.id for job in current_jobs]:
             self.scheduler.remove_job(self._job_id)
