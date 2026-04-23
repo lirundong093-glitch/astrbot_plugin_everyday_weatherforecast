@@ -92,18 +92,22 @@ class WeatherImageGenerator:
         return dirs[round(deg / 45) % 8]
 
     def _is_daytime(self, weather_data: Dict[str, Any]) -> bool:
+        from datetime import datetime
         cloud = weather_data.get("cloud", 0)
-        dt = weather_data.get("dt")
-        sys = weather_data.get("sys", {})
         sunrise = sys.get("sunrise")
         sunset = sys.get("sunset")
-        is_day_by_time = False
-        if dt and sunrise and sunset:
-            is_day_by_time = sunrise <= dt <= sunset
+        now = datetime.now()
+            # 解析 "HH:MM" 字符串为今天的时间对象
+        sunrise_time = datetime.strptime(sunrise_str, "%H:%M").time()
+        sunset_time = datetime.strptime(sunset_str, "%H:%M").time()
+        current_time = now.time()
+
+        if sunrise_time <= current_time <= sunset_time:
+            logger.debug(f"根据日出/日落时间判断为白天 (当前 {current_time} 在 {sunrise_time}-{sunset_time} 之间)")
+            return True
         else:
-            icon = weather_data.get("icon", "")
-            is_day_by_time = icon.endswith("d")
-        return is_day_by_time and cloud < 70
+            logger.debug(f"根据日出/日落时间判断为夜晚 (当前 {current_time} 不在 {sunrise_time}-{sunset_time} 之间)")
+            return False
 
     def _load_icon(self, icon_code: str, size: int, color_hex: str, context: str = "") -> Optional[Image.Image]:
         if not icon_code:
