@@ -134,12 +134,13 @@ class WeatherPlugin(Star):
             try:
                 logger.info(f"[DailyPush] 正在向群 {group_id} 发送推送...")
                 unified_origin = f"{PLATFORM_NAME}:{MESSAGE_TYPE}:{group_id}"
-                message_chain = MessageChain() \
+                image_chain = MessageChain() \
                     .message(f"☀️ 每日天气预报 - {self.config.default_city}") \
-                    .file_image(tmp_path)  # 传入临时文件路径
+                    .file_image(tmp_path)
+                await self.context.send_message(unified_origin, image_chain)
                 
                 if guide_text:
-                    message_chain = message_chain.message(f"\n\n📋 **今日天气指南**\n{guide_text}")
+                    await self.context.send_message(unified_origin, MessageChain().message(guide_text))
 
                 await self.context.send_message(unified_origin, message_chain)
                 success_count += 1
