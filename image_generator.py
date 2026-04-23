@@ -94,8 +94,8 @@ class WeatherImageGenerator:
     def _is_daytime(self, weather_data: Dict[str, Any]) -> bool:
         from datetime import datetime
         cloud = weather_data.get("cloud", 0)
-        sunrise = sys.get("sunrise")
-        sunset = sys.get("sunset")
+        sunrise = weather_data.get("sunrise")
+        sunset = weather_data.get("sunset")
         now = datetime.now()
             # 解析 "HH:MM" 字符串为今天的时间对象
         sunrise_time = datetime.strptime(sunrise_str, "%H:%M").time()
