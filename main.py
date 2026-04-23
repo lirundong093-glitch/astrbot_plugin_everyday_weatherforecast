@@ -72,7 +72,7 @@ class WeatherPlugin(Star):
             return self.config.is_group_allowed(group_id)
         return True  # 私聊始终允许
 
-     async def _daily_push(self):
+    async def _daily_push(self):
         """每日定时推送任务"""
         logger.info(f"[DailyPush] ========== 开始执行每日天气推送 ==========")
         logger.info(f"[DailyPush] 当前时间: {datetime.now()}")
