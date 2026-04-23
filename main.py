@@ -9,6 +9,7 @@ from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger
 from astrbot.api.platform import Platform
+from astrbot.api.event import MessageChain
 
 from .config import PluginConfig
 from .api_client import QWeatherClient
@@ -128,14 +129,13 @@ class WeatherPlugin(Star):
             try:
                 logger.info(f"[DailyPush] 正在向群 {group_id} 发送推送...")
                 unified_origin = f"{PLATFORM_NAME}:{MESSAGE_TYPE}:{group_id}"
-                chain = [
-                    Comp.Plain(f"☀️ 每日天气预报 - {self.config.default_city}"),
-                    Comp.Image.fromBytes(image_bytes)
-                ]
+                message_chain = MessageChain().message(f"☀️ 每日天气预报 - {self.config.default_city}")
+                message_chain = message_chain.image_bytes(image_bytes) # 从内存中的字节流发送图片
+                
                 if guide_text:
-                    chain.append(Comp.Plain(f"\n\n📋 **今日天气指南**\n{guide_text}"))
+                    message_chain = message_chain.message(f"\n\n📋 **今日天气指南**\n{guide_text}")
 
-                await self.context.send_message(unified_origin, chain)
+                await self.context.send_message(unified_origin, message_chain)
                 success_count += 1
                 logger.info(f"[DailyPush] ✅ 成功向群 {group_id} 发送推送")
                 await asyncio.sleep(0.5)
