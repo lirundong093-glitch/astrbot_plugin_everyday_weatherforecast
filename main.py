@@ -120,8 +120,8 @@ class WeatherPlugin(Star):
                 logger.warning("[DailyPush] LLM 生成天气指南失败，将仅发送天气图片")
 
         # 4. 向白名单群发送推送
-        PLATFORM_NAME = "aiocqhttp"
-        MESSAGE_TYPE = "group_message"
+        PLATFORM_NAME = "aiochttp"
+        MESSAGE_TYPE = "Groupmessage"
         
         success_count = 0
         for group_id in self.config.whitelist_groups:
