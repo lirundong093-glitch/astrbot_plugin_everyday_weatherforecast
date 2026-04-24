@@ -57,7 +57,7 @@ class WeatherPlugin(Star):
             self.llm_generator = None
 
         # ---------- 定时任务调度器（调度器稍后在 start() 中配置） ----------
-        self.scheduler = WeatherScheduler()
+        self.scheduler = WeatherScheduler(timezone_str=self.config.timezone)
         # 直接绑定回调
         self.scheduler.set_callback(self._daily_push)
 
