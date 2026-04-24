@@ -18,8 +18,19 @@
 - **灵活配置**：支持通过聊天指令动态修改配置，无需重启机器人。
 
 ## 生成图片示例
-![image_to_show](https://github.com/lirundong093-glitch/astrbot_plugin_everyday_weatherforecast/blob/main/image_to_show.png?raw=true)
+<div align="center">
+  
+![image_to_show](https://github.com/lirundong093-glitch/astrbot_plugin_everyday_weatherforecast/blob/main/image_to_show_day.png?raw=true) 
+### 当时间为白天且云量小于70时
 
+ </div> 
+ <div align="center">
+  
+![image_to_show](https://github.com/lirundong093-glitch/astrbot_plugin_everyday_weatherforecast/blob/main/image_to_show_night.png?raw=true) 
+### 当时间为晚上或阴天时
+
+ </div> 
+ 
 ## 📥 安装与配置
 
 1. 将插件放入 AstrBot 的 `addons` 目录。
