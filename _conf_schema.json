@@ -1,8 +1,74 @@
 {
-  "api_key": {
+  "qweather_key": {
+    "description": "和风天气 API Key",
     "type": "string",
-    "description": "OpenWeather API密钥",
     "default": "",
-    "required": true
+    "required": true,
+    "obvious_hint": true
+  },
+  "api_host": {
+    "description": "和风天气 API 主机地址",
+    "type": "string",
+    "default": "devapi.qweather.com",
+    "hint": "默认使用免费订阅主机，付费订阅请填写 api.qweather.com"
+  },
+  "default_city": {
+    "description": "默认查询城市",
+    "type": "string",
+    "default": "北京"
+  },
+  "daily_push_time": {
+    "description": "每日天气推送时间",
+    "type": "string",
+    "default": "08:00",
+    "hint": "格式为 HH:MM，例如 08:00"
+  },
+  "whitelist_groups": {
+    "description": "允许推送/响应的群聊白名单",
+    "type": "list",
+    "default": [],
+    "hint": "填写群聊 ID，留空则忽略白名单检查"
+  },
+  "admin_users": {
+    "description": "插件管理员 ID 列表",
+    "type": "list",
+    "default": [],
+    "hint": "此处配置的用户可以使用 weather_config 等管理指令"
+  },
+  "platform_name": {
+    "description": "消息平台名称",
+    "type": "string",
+    "default": "aiocqhttp",
+    "hint": "请据实填写，用于构造主动消息的统一ID，如 aiocqhttp"
+  },
+  "llm_enabled": {
+    "description": "是否启用 LLM 天气指南",
+    "type": "bool",
+    "default": false
+  },
+  "llm_provider": {
+    "description": "LLM 提供商",
+    "type": "string",
+    "default": "openai"
+  },
+  "llm_api_key": {
+    "description": "LLM API Key",
+    "type": "string",
+    "default": ""
+  },
+  "llm_base_url": {
+    "description": "LLM API 地址",
+    "type": "string",
+    "default": "https://api.openai.com/v1/chat/completions"
+  },
+  "llm_model": {
+    "description": "LLM 模型名称",
+    "type": "string",
+    "default": "gpt-4o-mini"
+  },
+  "holiday_cache_enabled": {
+    "description": "是否启用节假日问候",
+    "type": "bool",
+    "default": true
   }
 }
