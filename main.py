@@ -19,7 +19,7 @@ from .llm_guide import LLMGuideGenerator
 from .holiday import HolidayChecker
 
 
-@register("astrbot_plugin_weather", "Lucy", "和风天气预报插件", "2.0.0")
+@register("astrbot_plugin_weather", "Lucy", "和风天气预报插件", "1.1.0")
 class WeatherPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
