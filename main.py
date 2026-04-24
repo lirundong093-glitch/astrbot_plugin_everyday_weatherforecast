@@ -261,6 +261,9 @@ class WeatherPlugin(Star):
                 )
             elif not enabled:
                 self.llm_generator = None
+        elif key == "holiday_cache_enabled":
+            enabled = value.lower() in ["true", "1", "yes", "on"]
+            self.holiday_checker.enabled = enabled
 
         yield event.plain_result(msg)
 
