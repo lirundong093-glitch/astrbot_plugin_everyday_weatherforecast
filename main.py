@@ -264,7 +264,14 @@ class WeatherPlugin(Star):
         elif key == "holiday_cache_enabled":
             enabled = value.lower() in ["true", "1", "yes", "on"]
             self.holiday_checker.enabled = enabled
-
+        elif key == "llm_provider":
+            self.llm_generator.provider = value
+        elif key == "llm_api_key":
+            self.llm_generator.api_key = value
+        elif key == "llm_base_url":
+            self.llm_generator.base_url = value
+        elif key == "llm_model":
+            self.llm_generator.model = value
         yield event.plain_result(msg)
 
     # ==================== 生命周期管理 ====================
