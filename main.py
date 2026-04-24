@@ -63,15 +63,14 @@ class WeatherPlugin(Star):
 
         logger.info("和风天气预报插件 (v2.0) 已初始化")
 
-    def _get_unified_origins(self) -> List[str]:
-        """从白名单群组列表生成用于主动消息的统一会话ID"""
-        origins = []
-        platform_name = self.config.platform_name
-        for group_id in self.config.whitelist_groups:
-            if group_id:
-                # 格式：platform_name:message_type:session_id
-                origins.append(f"{platform_name}:GroupMessage:{group_id}")
-        return origins
+    def _check_admin(self, event: AstrMessageEvent) -> bool:
+        """检查消息发送者是否在插件管理员列表中，未配置则拒绝"""
+        sender_id = event.get_sender_id()
+        admin_users = self.config.admin_users
+        if not admin_users:
+            # 未配置管理员列表时，拒绝所有操作，引导配置
+            return False
+        return str(sender_id) in [str(uid) for uid in admin_users]
 
     def _check_admin(self, event: AstrMessageEvent) -> bool:
         """检查消息发送者是否在插件管理员列表中"""
