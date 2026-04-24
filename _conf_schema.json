@@ -22,7 +22,7 @@
     "type": "string",
     "default": "Asia/Shanghai",
     "hint": "如 Asia/Shanghai、Asia/Tokyo、America/New_York 等"
-  }，
+  },
   "daily_push_time": {
     "description": "每日天气推送时间",
     "type": "string",
