@@ -2,15 +2,14 @@ import asyncio
 import os
 import json
 import tempfile
+from typing import Optional, List
 from datetime import datetime
-from typing import Optional
 
 import astrbot.api.message_components as Comp
-from astrbot.api.event import filter, AstrMessageEvent
+from astrbot.api.event import filter, AstrMessageEvent, MessageChain
 from astrbot.api.star import Context, Star, register
-from astrbot.api import logger
+from astrbot.api import logger, AstrBotConfig
 from astrbot.api.platform import Platform
-from astrbot.api.event import MessageChain
 
 from .config import PluginConfig
 from .api_client import QWeatherClient
@@ -20,36 +19,32 @@ from .llm_guide import LLMGuideGenerator
 from .holiday import HolidayChecker
 
 
-@register("astrbot_plugin_weather", "Lucy", "和风天气预报插件", "1.0.0")
+@register("astrbot_plugin_weather", "Lucy", "和风天气预报插件", "2.0.0")
 class WeatherPlugin(Star):
-    def __init__(self, context: Context, config: Optional[dict] = None):
+    def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
-
         self.plugin_dir = os.path.dirname(os.path.abspath(__file__))
-        self.config = PluginConfig(self.plugin_dir)
 
-        # 和风天气 API 客户端
+        # ---------- 核心：使用 AstrBot 原生配置系统 ----------
+        self.config = PluginConfig(config, self.plugin_dir)
+
+        # ---------- 和风天气 API 客户端 ----------
         self.api_client = QWeatherClient(
             self.config.qweather_key,
             self.config.api_host,
             self.plugin_dir
         )
 
-        # 图片生成器
+        # ---------- 图片生成器 ----------
         self.image_generator = WeatherImageGenerator(plugin_dir=self.plugin_dir)
 
-        # 定时任务调度器
-        self.scheduler = WeatherScheduler()
-        self.scheduler.set_callback(self._daily_push)
-        self._update_schedule_from_config()
-
-        # 节假日检测器（与 LLM 开关联动）
+        # ---------- 节假日检测器 ----------
         self.holiday_checker = HolidayChecker(
             cache_dir=self.plugin_dir,
             enabled=self.config.llm_enabled
         )
 
-        # LLM 指南生成器（如果启用）
+        # ---------- LLM 指南生成器 ----------
         if self.config.llm_enabled:
             self.llm_generator = LLMGuideGenerator(
                 provider=self.config.llm_provider,
@@ -61,19 +56,38 @@ class WeatherPlugin(Star):
         else:
             self.llm_generator = None
 
-        logger.info("和风天气预报插件已初始化")
+        # ---------- 定时任务调度器（调度器稍后在 start() 中配置） ----------
+        self.scheduler = WeatherScheduler()
+        # 直接绑定回调
+        self.scheduler.set_callback(self._daily_push)
 
-    def _update_schedule_from_config(self):
-        """从配置更新定时任务"""
-        if self.config.daily_push_time:
-            self.scheduler.update_schedule(self.config.daily_push_time)
+        logger.info("和风天气预报插件 (v2.0) 已初始化")
+
+    def _get_unified_origins(self) -> List[str]:
+        """从白名单群组列表生成用于主动消息的统一会话ID"""
+        origins = []
+        platform_name = self.config.platform_name
+        for group_id in self.config.whitelist_groups:
+            if group_id:
+                # 格式：platform_name:message_type:session_id
+                origins.append(f"{platform_name}:GroupMessage:{group_id}")
+        return origins
+
+    def _check_admin(self, event: AstrMessageEvent) -> bool:
+        """检查消息发送者是否在插件管理员列表中"""
+        sender_id = event.get_sender_id()
+        admin_users = self.config.admin_users
+        if not admin_users:
+            # 如果未配置管理员列表，则默认允许所有配置操作（谨慎）
+            return True
+        return str(sender_id) in [str(uid) for uid in admin_users]
 
     def _check_whitelist(self, event: AstrMessageEvent) -> bool:
         """检查消息来源是否在白名单中"""
         group_id = event.get_group_id()
         if group_id:
             return self.config.is_group_allowed(group_id)
-        return True  # 私聊始终允许
+        return True
 
     async def _get_weather_image(self, city: str) -> Optional[bytes]:
         """根据城市获取天气数据并生成图片字节流"""
@@ -83,72 +97,72 @@ class WeatherPlugin(Star):
         return self.image_generator.generate(weather_data)
 
     async def _daily_push(self):
-        """每日定时推送任务"""
+        """每日定时推送任务（被调度器回调）"""
         logger.info(f"[DailyPush] ========== 开始执行每日天气推送 ==========")
         logger.info(f"[DailyPush] 当前时间: {datetime.now()}")
         logger.info(f"[DailyPush] 默认城市: {self.config.default_city}")
-        logger.info(f"[DailyPush] 白名单群列表: {self.config.whitelist_groups}")
-        logger.info(f"[DailyPush] LLM 启用状态: {self.config.llm_enabled}")
 
-        # 1. 配置检查
+        # 1. 检查基本配置
         if not self.config.qweather_key or not self.config.api_host:
-            logger.warning("[DailyPush] 和风天气 API Key 或 API Host 未配置，跳过定时推送")
-            return
-
-        if not self.config.default_city:
-            logger.error("[DailyPush] 默认城市未配置，无法推送")
+            logger.error("[DailyPush] API Key 或 Host 未配置，跳过推送")
             return
 
         if not self.config.whitelist_groups:
-            logger.warning("[DailyPush] 白名单群列表为空，将不会向任何群发送消息！")
+            logger.warning("[DailyPush] 白名单群列表为空，无法推送")
             return
 
         # 2. 获取天气数据并生成图片
-        weather_data = await self.api_client.get_complete_weather(self.config.default_city)
+        city = self.config.default_city or "北京"
+        weather_data = await self.api_client.get_complete_weather(city)
         if not weather_data:
-            logger.error("[DailyPush] 获取天气数据失败，定时推送中止")
+            logger.error("[DailyPush] 获取天气数据失败，中止")
             return
 
         image_bytes = self.image_generator.generate(weather_data)
 
-        # 3. 生成 LLM 天气指南（如果启用）
+        # 3. 生成 LLM 指南（可选）
         guide_text = ""
         if self.config.llm_enabled and self.llm_generator:
             guide_text = await self.llm_generator.generate_guide(
-                city=self.config.default_city,
+                city=city,
                 weather_data=weather_data
             )
-            if not guide_text:
-                logger.warning("[DailyPush] LLM 生成天气指南失败，将仅发送天气图片")
 
-        # 4. 向白名单群发送推送
-        PLATFORM_NAME = self.config.platform_name
-        MESSAGE_TYPE = "GroupMessage"
-        success_count = 0
-
+        # 4. 准备图片临时文件
         with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
             tmp_file.write(image_bytes)
             tmp_path = tmp_file.name
-            
-        for group_id in self.config.whitelist_groups:
-            try:
-                logger.info(f"[DailyPush] 正在向群 {group_id} 发送推送...")
-                unified_origin = f"{PLATFORM_NAME}:{MESSAGE_TYPE}:{group_id}"
-                image_chain = MessageChain() \
-                    .message(f"☀️ 每日天气预报 - {self.config.default_city}") \
-                    .file_image(tmp_path)
-                await self.context.send_message(unified_origin, image_chain)
-                
-                if guide_text:
-                    await self.context.send_message(unified_origin, MessageChain().message(guide_text))
 
-                success_count += 1
-                logger.info(f"[DailyPush] ✅ 成功向群 {group_id} 发送推送")
-                await asyncio.sleep(0.5)
-            except Exception as e:
-                logger.error(f"[DailyPush] ❌ 向群 {group_id} 发送失败: {e}", exc_info=True)
+        try:
+            # 5. 向所有白名单群发送推送
+            origins = self._get_unified_origins()
+            success_count = 0
+            for origin in origins:
+                try:
+                    # 构建图文消息链
+                    image_chain = MessageChain() \
+                        .message(f"☀️ 每日天气预报 - {city}") \
+                        .file_image(tmp_path)
+                    await self.context.send_message(origin, image_chain)
 
-        logger.info(f"[DailyPush] 推送完成，成功发送 {success_count}/{len(self.config.whitelist_groups)} 个群")
+                    if guide_text:
+                        await self.context.send_message(
+                            origin,
+                            MessageChain().message(guide_text)
+                        )
+                    success_count += 1
+                    logger.info(f"[DailyPush] ✅ 成功向 {origin} 发送")
+                    await asyncio.sleep(0.5)
+                except Exception as e:
+                    logger.error(f"[DailyPush] ❌ 向 {origin} 发送失败: {e}", exc_info=True)
+
+            logger.info(f"[DailyPush] 推送完成: {success_count}/{len(origins)}")
+        finally:
+            # 清理临时文件
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+
+    # ==================== 指令注册 ====================
 
     @filter.command("weather")
     async def weather(self, event: AstrMessageEvent):
@@ -176,7 +190,7 @@ class WeatherPlugin(Star):
         image_bytes = await self._get_weather_image(city)
 
         if not image_bytes:
-            yield event.plain_result(f"❌ 无法获取「{city}」的天气信息，请检查城市名称是否正确")
+            yield event.plain_result(f"❌ 无法获取「{city}」的天气信息")
             return
 
         chain = [
@@ -191,98 +205,52 @@ class WeatherPlugin(Star):
         logger.info("[TestPush] 收到手动推送指令")
         await self._daily_push()
         yield event.plain_result("✅ 手动推送已执行，请查看日志")
-    
+
     @filter.command("weather_config")
     async def weather_config(self, event: AstrMessageEvent, key: str = None, value: str = None):
         """
         配置指令：/weather_config [key] [value]
-        支持的配置项：
-            qweather_key, api_host, default_city, push_time,
-            whitelist_add, whitelist_remove,
-            llm_enabled, llm_provider, llm_api_key, llm_base_url, llm_model,
-            holiday_cache_enabled
+        需要插件管理员权限。
         """
-        # 可在此处添加管理员权限检查
-        # if not event.is_admin():
-        #     yield event.plain_result("⛔ 权限不足")
-        #     return
+        # ---------- 管理员权限检查 ----------
+        if not self._check_admin(event):
+            yield event.plain_result("⛔ 权限不足：您不是插件管理员。请在 _conf_schema.json 的 admin_users 中添加您的 ID。")
+            return
 
         if not key:
-            # 安全处理白名单显示（群号可能是整数）
-            whitelist_display = '全部群聊'
-            if self.config.whitelist_groups:
-                whitelist_display = ', '.join(str(gid) for gid in self.config.whitelist_groups)
-
+            # 显示当前配置
+            whitelist_display = ', '.join(str(gid) for gid in self.config.whitelist_groups) if self.config.whitelist_groups else '全部群聊'
+            admin_display = ', '.join(str(uid) for uid in self.config.admin_users) if self.config.admin_users else '未配置'
             info = f"""📋 当前配置：
 • 和风天气 Key: {'已设置' if self.config.qweather_key else '❌ 未设置'}
 • API Host: {self.config.api_host or '❌ 未设置'}
 • 默认城市: {self.config.default_city}
-• 推送时间: {self.config.daily_push_time or '未设置'}
+• 推送时间: {self.config.daily_push_time}
 • 白名单群: {whitelist_display}
+• 管理员列表: {admin_display}
 • LLM 指南: {'开启' if self.config.llm_enabled else '关闭'}
 • LLM 提供商: {self.config.llm_provider}
 • LLM 模型: {self.config.llm_model}
-• LLM API Key: {self.config.llm_api_key}
-• LLM Base URL: {self.config.llm_base_url}
 • 节假日功能: {'开启' if self.config.holiday_cache_enabled else '关闭'}"""
             yield event.plain_result(info)
             return
-            
+
         if not value and key not in ["llm_enabled", "holiday_cache_enabled"]:
             yield event.plain_result("⚠️ 请提供配置值")
             return
 
-        config_path = os.path.join(self.plugin_dir, "user_config.json")
-        try:
-            with open(config_path, "r", encoding="utf-8") as f:
-                user_config = json.load(f)
-        except:
-            user_config = {}
+        msg = self.config.update_config(key, value)
 
-        msg = ""
-
+        # 实时应用某些配置变更
         if key == "qweather_key":
-            user_config["qweather_key"] = value
-            self.config.qweather_key = value
             self.api_client.api_key = value
-            msg = "✅ 和风天气 API Key 已更新"
-
         elif key == "api_host":
-            user_config["api_host"] = value.strip()
-            self.config.api_host = value.strip()
             self.api_client.api_host = value.strip()
             self.api_client._build_endpoints()
-            msg = f"✅ API Host 已更新为: {value}"
-
-        elif key == "default_city":
-            user_config["default_city"] = value
-            self.config.default_city = value
-            msg = f"✅ 默认城市已设置为: {value}"
-
-        elif key == "push_time":
-            user_config["daily_push_time"] = value
-            self.config.daily_push_time = value
-            self._update_schedule_from_config()
-            msg = f"✅ 推送时间已设置为: {value}"
-
-        elif key == "whitelist_add":
-            if "whitelist_groups" not in user_config:
-                user_config["whitelist_groups"] = self.config.whitelist_groups.copy()
-            if value not in user_config["whitelist_groups"]:
-                user_config["whitelist_groups"].append(value)
-                self.config.whitelist_groups = user_config["whitelist_groups"]
-            msg = f"✅ 群 {value} 已加入白名单"
-
-        elif key == "whitelist_remove":
-            if "whitelist_groups" in user_config and value in user_config["whitelist_groups"]:
-                user_config["whitelist_groups"].remove(value)
-                self.config.whitelist_groups = user_config["whitelist_groups"]
-            msg = f"✅ 群 {value} 已从白名单移除"
-
+        elif key == "daily_push_time":
+            self.scheduler.update_schedule(self.config.daily_push_time)
         elif key == "llm_enabled":
             enabled = value.lower() in ["true", "1", "yes", "on"]
-            user_config["llm_enabled"] = enabled
-            self.config.llm_enabled = enabled
             self.holiday_checker.enabled = enabled
             if enabled and not self.llm_generator:
                 self.llm_generator = LLMGuideGenerator(
@@ -294,70 +262,28 @@ class WeatherPlugin(Star):
                 )
             elif not enabled:
                 self.llm_generator = None
-            msg = f"✅ LLM 天气指南已{'开启' if enabled else '关闭'}"
-
-        elif key == "llm_provider":
-            user_config["llm_provider"] = value
-            self.config.llm_provider = value
-            if self.llm_generator:
-                self.llm_generator.provider = value
-            msg = f"✅ LLM 提供商已设置为: {value}"
-
-        elif key == "llm_api_key":
-            user_config["llm_api_key"] = value
-            self.config.llm_api_key = value
-            if self.llm_generator:
-                self.llm_generator.api_key = value
-            msg = "✅ LLM API Key 已更新"
-
-        elif key == "llm_base_url":
-            user_config["llm_base_url"] = value
-            self.config.llm_base_url = value
-            if self.llm_generator:
-                self.llm_generator.base_url = value
-            msg = f"✅ LLM Base URL 已设置为: {value}"
-
-        elif key == "llm_model":
-            user_config["llm_model"] = value
-            self.config.llm_model = value
-            if self.llm_generator:
-                self.llm_generator.model = value
-            msg = f"✅ LLM 模型已设置为: {value}"
-
-        elif key == "holiday_cache_enabled":
-            enabled = value.lower() in ["true", "1", "yes", "on"]
-            user_config["holiday_cache_enabled"] = enabled
-            self.config.holiday_cache_enabled = enabled
-            self.holiday_checker.enabled = enabled
-            msg = f"✅ 节假日功能已{'开启' if enabled else '关闭'}"
-
-        elif key == "platform_name":
-            user_config["platform_name"] = value
-            self.config.platform_name = value
-            msg = f"✅ 平台名称已设置为: {value}"
-        
-        else:
-            yield event.plain_result(f"❌ 未知配置项: {key}")
-            return
-
-        # 保存配置
-        with open(config_path, "w", encoding="utf-8") as f:
-            json.dump(user_config, f, ensure_ascii=False, indent=2)
 
         yield event.plain_result(msg)
 
+    # ==================== 生命周期管理 ====================
+
     async def start(self):
         await super().start()
-        # 打印调度器状态
-        logger.info(f"[Main] 插件启动，当前推送时间配置: {self.config.daily_push_time}")
-        logger.info(f"[Main] 白名单群: {self.config.whitelist_groups}")
+
+        # 重新从配置中同步并初始化调度器
+        if self.config.daily_push_time:
+            logger.info(f"[Main] 配置的推送时间: {self.config.daily_push_time}")
+            self.scheduler.update_schedule(self.config.daily_push_time)
+
+        # 启动调度器
         self.scheduler.start()
-        # 启动后主动打印一下调度器中的任务
+
+        # 打印调度器状态用于调试
         jobs = self.scheduler.scheduler.get_jobs()
         logger.info(f"[Main] 调度器启动完成，当前任务数: {len(jobs)}")
         for job in jobs:
             logger.info(f"[Main] 任务 ID: {job.id}, 下次运行: {job.next_run_time}")
-        logger.info("[Main] 和风天气预报插件已启动")
+        logger.info("[Main] 和风天气预报插件 v2.0 已启动")
 
     async def terminate(self):
         self.scheduler.shutdown()
