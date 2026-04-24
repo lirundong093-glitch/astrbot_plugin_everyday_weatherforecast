@@ -72,15 +72,6 @@ class WeatherPlugin(Star):
             return False
         return str(sender_id) in [str(uid) for uid in admin_users]
 
-    def _check_admin(self, event: AstrMessageEvent) -> bool:
-        """检查消息发送者是否在插件管理员列表中"""
-        sender_id = event.get_sender_id()
-        admin_users = self.config.admin_users
-        if not admin_users:
-            # 如果未配置管理员列表，则默认允许所有配置操作（谨慎）
-            return True
-        return str(sender_id) in [str(uid) for uid in admin_users]
-
     def _check_whitelist(self, event: AstrMessageEvent) -> bool:
         """检查消息来源是否在白名单中"""
         group_id = event.get_group_id()
