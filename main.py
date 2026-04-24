@@ -269,14 +269,19 @@ class WeatherPlugin(Star):
 
     async def start(self):
         await super().start()
-        if not self.config.daily_push_time:
-            logger.warning("[Main] 每日推送时间未配置，定时任务不会执行。请在配置中设置 daily_push_time。")
-        else:
-            logger.info(f"[Main] 配置的推送时间: {self.config.daily_push_time}")
+        logger.info(f"[Main] 推送时间: {self.config.daily_push_time}")
+
+        if self.config.daily_push_time:
             self.scheduler.update_schedule(self.config.daily_push_time)
-        self.scheduler.start()
+        else:
+            logger.warning("[Main] 推送时间未配置，调度器将启动但无任务")
+
+        self.scheduler.start()   # 无论是否有任务，都要启动调度器
+
         jobs = self.scheduler.scheduler.get_jobs()
-        logger.info(f"[Main] 调度器已启动，当前任务数: {len(jobs)}")
+        logger.info(f"[Main] 调度器启动完成，任务数: {len(jobs)}")
+        for job in jobs:
+            logger.info(f"[Main] 任务: {job.id}, 下次运行: {job.next_run_time}")
 
     async def terminate(self):
         self.scheduler.shutdown()
