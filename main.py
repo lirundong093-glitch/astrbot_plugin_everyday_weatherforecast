@@ -61,6 +61,15 @@ class WeatherPlugin(Star):
         # 直接绑定回调
         self.scheduler.set_callback(self._daily_push)
 
+        # ---------- 立即启动调度器 ----------
+        if self.config.daily_push_time:
+            self.scheduler.update_schedule(self.config.daily_push_time)
+        self.scheduler.start()
+        jobs = self.scheduler.scheduler.get_jobs()
+        logger.info(f"[Main] 调度器已启动（在 __init__ 中），当前任务数: {len(jobs)}")
+        for job in jobs:
+            logger.info(f"[Main] 任务: {job.id}, 下次运行: {job.next_run_time}")
+
         logger.info("和风天气预报插件已初始化")
 
     def _check_admin(self, event: AstrMessageEvent) -> bool:
@@ -269,19 +278,8 @@ class WeatherPlugin(Star):
 
     async def start(self):
         await super().start()
-        logger.info(f"[Main] 推送时间: {self.config.daily_push_time}")
-
-        if self.config.daily_push_time:
-            self.scheduler.update_schedule(self.config.daily_push_time)
-        else:
-            logger.warning("[Main] 推送时间未配置，调度器将启动但无任务")
-
-        self.scheduler.start()   # 无论是否有任务，都要启动调度器
-
-        jobs = self.scheduler.scheduler.get_jobs()
-        logger.info(f"[Main] 调度器启动完成，任务数: {len(jobs)}")
-        for job in jobs:
-            logger.info(f"[Main] 任务: {job.id}, 下次运行: {job.next_run_time}")
+        logger.info("=== [Main] start() 被调用（调度器已在 __init__ 中启动）===")
+    # 可以在此进行其他需要等待框架就绪的操作
 
     async def terminate(self):
         self.scheduler.shutdown()
