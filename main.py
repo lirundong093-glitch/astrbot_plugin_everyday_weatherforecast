@@ -61,7 +61,7 @@ class WeatherPlugin(Star):
         # 直接绑定回调
         self.scheduler.set_callback(self._daily_push)
 
-        logger.info("和风天气预报插件 (v2.0) 已初始化")
+        logger.info("和风天气预报插件已初始化")
 
     def _check_admin(self, event: AstrMessageEvent) -> bool:
         """检查消息发送者是否在插件管理员列表中，未配置则拒绝"""
