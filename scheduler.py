@@ -10,7 +10,7 @@ import pytz
 class WeatherScheduler:
     """定时任务管理器"""
 
-    def __init__(self, timezone: str = "Asia/Shanghai"):
+    def __init__(self, timezone_str: str = "Asia/Shanghai"):
         self.timezone = pytz.timezone(timezone_str)
         self.scheduler = AsyncIOScheduler(timezone=self.timezone)
         self._job_id = "weather_daily_push"
