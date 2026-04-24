@@ -76,9 +76,12 @@ class LLMGuideGenerator:
             elif days_until_saturday == 3:
                 rest_day_text = f"今天是周三"
                 cheer_text = "工作日马上就要过去一半了，如果工作有点疲劳的话就休息一下吧(￣﹃￣)！"
-            else:
+            elif days_until_saturday == 2:
                 rest_day_text = f"距离休息日还有 {days_until_saturday} 天"
                 cheer_text = "加油，再坚持一下，美好的周末就在眼前 (•̀ᴗ•́)و！"
+            elif days_until_saturday == 1:
+                rest_day_text = f"距离休息日还有 {days_until_saturday} 天"
+                cheer_text = "明天就是周末了，我已经迫不及待了( •̀ ω •́ )✧!"
             holiday_message = ""
 
         # 提取天气数据
