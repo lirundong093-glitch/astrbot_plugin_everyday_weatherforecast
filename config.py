@@ -54,6 +54,9 @@ class PluginConfig:
         # 节假日
         self.holiday_cache_enabled: bool = self._astr_config.get("holiday_cache_enabled", True)
 
+        #时区配置
+        self.timezone: str = self._astr_config.get("timezone", "Asia/Shanghai")    
+        
     def update_config(self, key: str, value: str) -> str:
         """更新单项配置并自动保存，返回提示信息"""
         key_mapping = {
