@@ -84,6 +84,12 @@
 - **图片生成**：PIL / Pillow（内置渲染）
 - **AI 增强**：OpenAI 兼容格式的 LLM 接口（可选）
 
+## 📝 许可证
+
+[MIT License](LICENSE)
+
+---
+
 ## 🙏 鸣谢
 
 - [和风天气](https://www.qweather.com/) 提供稳定准确的天气数据。
@@ -91,11 +97,5 @@
 - [AstrBot Repo](https://github.com/AstrBotDevs/AstrBot)
 - [AstrBot Plugin Development Docs (Chinese)](https://docs.astrbot.app/dev/star/plugin-new.html)
 - [AstrBot Plugin Development Docs (English)](https://docs.astrbot.app/en/dev/star/plugin-new.html)
-
-## 📝 许可证
-
-[MIT License](LICENSE)
-
----
 
 <p align="center">Made with ❤️ by <a href="https://github.com/lirundong093-glitch">Lucy</a></p>
