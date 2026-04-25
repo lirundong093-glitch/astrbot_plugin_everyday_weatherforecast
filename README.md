@@ -8,6 +8,13 @@
 
 基于 AstrBot 框架与和风天气 API 开发的智能天气查询与推送插件，目前只支持aiohttp。支持生成可视化天气图片、每日定时推送、AI 智能生成生活指南（可选）。
 
+<p align="center">
+  <img src="https://img.shields.io/badge/version-v1.1.0-blue" alt="Version">
+  <img src="https://img.shields.io/badge/Python-3.8%2B-blue" alt="Python">
+  <img src="https://img.shields.io/badge/AstrBot-%E6%8F%92%E4%BB%B6%E6%A1%86%E6%9E%B6-brightgreen" alt="AstrBot">
+  <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
+</p>
+
 ## ✨ 主要特性
 
 - **实时天气查询**：支持指定城市查询，返回包含温度、风力、湿度、空气质量、未来预报等信息的美观图片。
@@ -84,3 +91,11 @@
 - [AstrBot Repo](https://github.com/AstrBotDevs/AstrBot)
 - [AstrBot Plugin Development Docs (Chinese)](https://docs.astrbot.app/dev/star/plugin-new.html)
 - [AstrBot Plugin Development Docs (English)](https://docs.astrbot.app/en/dev/star/plugin-new.html)
+
+## 📝 许可证
+
+[MIT License](LICENSE)
+
+---
+
+<p align="center">Made with ❤️ by <a href="https://github.com/lirundong093-glitch">Lucy</a></p>
