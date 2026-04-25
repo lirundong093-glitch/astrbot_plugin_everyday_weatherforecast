@@ -333,7 +333,7 @@ class WeatherImageGenerator:
             char_width = draw.textlength("月", font=self.font_moon)
             moon_text_y = info_y_start + len(right_col_items) * line_gap
             moon_text_x = int(right_col_x + char_width)
-            draw.text((right_col_x, moon_text_y), f"月相: {moon_phase}", fill=text_main, font=self.font_moon)
+            draw.text((right_col_x, moon_text_y), f"月相:  {moon_phase}", fill=text_main, font=self.font_moon)
 
             if moon_icon_code:
                 icon_size = int(2 * line_gap)  # 60px
