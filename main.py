@@ -32,7 +32,8 @@ class WeatherPlugin(Star):
         self.api_client = QWeatherClient(
             self.config.qweather_key,
             self.config.api_host,
-            self.plugin_dir
+            self.plugin_dir,
+            indices_types=self.config.indices_types
         )
 
         # ---------- 图片生成器 ----------
@@ -73,13 +74,19 @@ class WeatherPlugin(Star):
         logger.info("和风天气预报插件已初始化")
 
     def _get_unified_origins(self) -> List[str]:
-        """从白名单群组列表生成用于主动消息的统一会话ID"""
+        """从白名单群组列表生成用于主动消息的统一会话ID（自动获取所有平台）"""
         origins = []
-        platform_name = self.config.platform_name
+    
+        # ✅ 通过平台管理器获取所有已加载的平台实例
+        platforms = self.context.platform_manager.get_insts()  # List[Platform]
+        
         for group_id in self.config.whitelist_groups:
             if group_id:
-                # 格式：platform_name:message_type:session_id
-                origins.append(f"{platform_name}:GroupMessage:{group_id}")
+                # ✅ 为每个登录的平台都生成会话 ID
+                for platform in platforms:
+                    platform_name = platform.meta().name  # 获取平台名称，如 "aiocqhttp"
+                    origins.append(f"{platform_name}:GroupMessage:{group_id}")
+        
         return origins
 
     def _check_admin(self, event: AstrMessageEvent) -> bool:
