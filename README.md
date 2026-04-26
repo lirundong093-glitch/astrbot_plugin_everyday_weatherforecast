@@ -57,13 +57,12 @@
 
 | Key | 说明 | 取值示例 |
 | :--- | :--- | :--- |
-| `platfome_name` | astrbot平台名称 | Lucy |
 | `qweather_key` | 和风天气 API Key | `abc123def456` |
 | `api_host` | 接口地址 | `devapi.qweather.com` |
 | `default_city` | 默认查询城市 | `北京` |
 | `daily_push_time` | 每日推送时间 | `08:00` |
-| `whitelist_add` | 添加推送白名单群 | `123456789` |
-| `whitelist_remove` | 移除推送白名单群 | `123456789` |
+| `whitelist_add` | 添加推送白名单群 | `Napcat:GroupMessage:123456789` |
+| `whitelist_remove` | 移除推送白名单群 | `Napcat:GroupMessage:123456789` |
 | `llm_enabled` | 开关 AI 指南功能 | `true` / `false` |
 | `llm_provider` | LLM 供应商标识 | `openai` / `deepseek` |
 | `llm_api_key` | LLM 密钥 | `sk-xxxxxx` |
