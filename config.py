@@ -132,8 +132,8 @@ class PluginConfig:
         else:
             return f"❌ 未知配置项: {key}"
 
-    def is_group_allowed(self, group_id: str) -> bool:
-        """检查群聊是否在白名单中"""
+    def is_origin_allowed(self, origin: str) -> bool:
+        """检查完整会话标识符是否在白名单中"""
         if not self.whitelist_groups:
             return True
-        return str(group_id) in [str(g) for g in self.whitelist_groups]
+        return origin in self.whitelist_groups
