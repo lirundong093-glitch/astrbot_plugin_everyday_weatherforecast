@@ -9,11 +9,12 @@ from astrbot.api import logger
 class QWeatherClient:
     """和风天气 API 客户端（支持 TomTom 格式自动转换）"""
 
-    def __init__(self, api_key: str, api_host: str = "", plugin_dir: str = ""):
+    def __init__(self, api_key: str, api_host: str = "", plugin_dir: str = "", indices_types: str = "1,3,5,6,7,8,9,10,11,14,15"):
         self.api_key = api_key
         raw_host = api_host.strip() if api_host else ""
         self.api_host = raw_host.replace("https://", "").replace("http://", "").rstrip('/')
         self.plugin_dir = plugin_dir
+        self.indices_types = indices_types
         self._city_id_map = {}
         self._load_city_list()
         self._build_endpoints()
@@ -52,8 +53,6 @@ class QWeatherClient:
         self.AIR_DAILY_URL = f"https://{self.api_host}/airquality/v1/daily/"
         self.INDICES_URL = f"https://{self.api_host}/v7/indices/1d"
         logger.info(f"API 端点已构建，使用 Host: {self.api_host}")
-
-    INDICES_TYPES = "1,3,5,6,7,8,9,10,11,14,15,16"
 
     async def _request(self, url: str, params: dict) -> Optional[Dict[str, Any]]:
         """统一请求，自动兼容和风标准格式与 TomTom 格式"""
@@ -160,7 +159,7 @@ class QWeatherClient:
         return await self._request(url, {})
 
     async def get_indices(self, location_id: str) -> Optional[Dict[str, Any]]:
-        return await self._request(self.INDICES_URL, {"location": location_id, "type": self.INDICES_TYPES})
+        return await self._request(self.INDICES_URL, {"location": location_id, "type": self.indices_types})
 
     async def get_complete_weather(self, city: str) -> Optional[Dict[str, Any]]:
         logger.info(f"开始查询天气: {city}")
