@@ -63,8 +63,8 @@ class LLMGuideGenerator:
             cheer_text = ""
         else:
             greeting = f"今天是{weekday}，早上好！☀️"
-            days_until_saturday = (5 - today.weekday()) % 7
-            if days_until_saturday == 0:
+            days_until_saturday = (6 - today.weekday()) % 7
+            if days_until_saturday == 0 or days_until_saturday == 6:
                 rest_day_text = "今天是休息日！"
                 cheer_text = "好好享受这难得的放松时光吧 (◕‿◕)！"
             elif days_until_saturday == 5:
@@ -97,7 +97,16 @@ class LLMGuideGenerator:
         aqi = weather_data.get("aqi", "")
         precip = weather_data.get("precip", "")
         aqi_category = weather_data.get("aqi_category", "")
-
+        # 提取天气指数
+        indices = weather_data.get("indices", [])
+        lines = []
+        for item in indices:
+            name = self.INDEX_NAMES.get(item.get("type", ""), "未知")
+            category = item.get("category", "")
+            text = item.get("text", "")
+            if name and text:
+                lines.append(f"{name}：{category}（{text}）")
+        indices_text = "\n".join(lines) if lines else ""
         # 构建完整提示词
         prompt = f"""你是一个贴心的天气助手，请根据以下天气信息，为用户生成一段简洁、亲切的今日天气指南（不超过200字）。
 
