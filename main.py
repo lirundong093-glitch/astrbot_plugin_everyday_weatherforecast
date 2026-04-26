@@ -74,20 +74,8 @@ class WeatherPlugin(Star):
         logger.info("和风天气预报插件已初始化")
 
     def _get_unified_origins(self) -> List[str]:
-        """从白名单群组列表生成用于主动消息的统一会话ID（自动获取所有平台）"""
-        origins = []
-    
-        # ✅ 通过平台管理器获取所有已加载的平台实例
-        platforms = self.context.platform_manager.get_insts()  # List[Platform]
-        
-        for group_id in self.config.whitelist_groups:
-            if group_id:
-                # ✅ 为每个登录的平台都生成会话 ID
-                for platform in platforms:
-                    platform_name = platform.meta().name  # 获取平台名称，如 "aiocqhttp"
-                    origins.append(f"{platform_name}:GroupMessage:{group_id}")
-        
-        return origins
+        """返回白名单中填写的完整会话标识符列表（直接用于发送）"""
+        return self.config.whitelist_groups or []
 
     def _check_admin(self, event: AstrMessageEvent) -> bool:
         """检查消息发送者是否在插件管理员列表中，未配置则拒绝"""
@@ -99,11 +87,15 @@ class WeatherPlugin(Star):
         return str(sender_id) in [str(uid) for uid in admin_users]
 
     def _check_whitelist(self, event: AstrMessageEvent) -> bool:
-        """检查消息来源是否在白名单中"""
+        """检查消息来源是否在白名单内（匹配完整会话标识符）"""
         group_id = event.get_group_id()
-        if group_id:
-            return self.config.is_group_allowed(group_id)
-        return True
+        if not group_id:
+            # 私聊等非群聊消息不作白名单限制
+            return True
+        platform_name = event.get_platform_name()
+        message_type = event.get_message_type()   # 通常为 GroupMessage
+        origin = f"{platform_name}:{message_type}:{group_id}"
+        return self.config.is_origin_allowed(origin)
 
     async def _get_weather_image(self, city: str) -> Optional[bytes]:
         """根据城市获取天气数据并生成图片字节流"""
@@ -235,7 +227,7 @@ class WeatherPlugin(Star):
 
         if not key:
             # 显示当前配置
-            whitelist_display = ', '.join(str(gid) for gid in self.config.whitelist_groups) if self.config.whitelist_groups else '全部群聊'
+            whitelist_display = ', '.join(str(g) for g in self.config.whitelist_groups) if self.config.whitelist_groups else '全部群聊'
             admin_display = ', '.join(str(uid) for uid in self.config.admin_users) if self.config.admin_users else '未配置'
             info = f"""📋 当前配置：
 • 和风天气 Key: {'已设置' if self.config.qweather_key else '❌ 未设置'}
