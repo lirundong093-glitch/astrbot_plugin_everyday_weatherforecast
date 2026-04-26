@@ -19,7 +19,7 @@ from .llm_guide import LLMGuideGenerator
 from .holiday import HolidayChecker
 
 
-@register("astrbot_plugin_weather", "Lucy", "和风天气预报插件", "1.1.0")
+@register("astrbot_plugin_weather", "Lucy", "和风天气预报插件", "2.0.0")
 class WeatherPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
@@ -60,7 +60,7 @@ class WeatherPlugin(Star):
         self.scheduler = WeatherScheduler(timezone_str=self.config.timezone)
         # 直接绑定回调
         self.scheduler.set_callback(self._daily_push)
-
+        
         # ---------- 立即启动调度器 ----------
         if self.config.daily_push_time:
             self.scheduler.update_schedule(self.config.daily_push_time)
@@ -71,6 +71,16 @@ class WeatherPlugin(Star):
             logger.info(f"[Main] 任务: {job.id}, 下次运行: {job.next_run_time}")
 
         logger.info("和风天气预报插件已初始化")
+
+    def _get_unified_origins(self) -> List[str]:
+        """从白名单群组列表生成用于主动消息的统一会话ID"""
+        origins = []
+        platform_name = self.config.platform_name
+        for group_id in self.config.whitelist_groups:
+            if group_id:
+                # 格式：platform_name:message_type:session_id
+                origins.append(f"{platform_name}:GroupMessage:{group_id}")
+        return origins
 
     def _check_admin(self, event: AstrMessageEvent) -> bool:
         """检查消息发送者是否在插件管理员列表中，未配置则拒绝"""
@@ -261,17 +271,7 @@ class WeatherPlugin(Star):
                 )
             elif not enabled:
                 self.llm_generator = None
-        elif key == "holiday_cache_enabled":
-            enabled = value.lower() in ["true", "1", "yes", "on"]
-            self.holiday_checker.enabled = enabled
-        elif key == "llm_provider":
-            self.llm_generator.provider = value
-        elif key == "llm_api_key":
-            self.llm_generator.api_key = value
-        elif key == "llm_base_url":
-            self.llm_generator.base_url = value
-        elif key == "llm_model":
-            self.llm_generator.model = value
+
         yield event.plain_result(msg)
 
     # ==================== 生命周期管理 ====================
