@@ -39,8 +39,7 @@ class PluginConfig:
         self.default_city: str = self._astr_config.get("default_city", "北京")
         self.daily_push_time: str = self._astr_config.get("daily_push_time", "08:00")
         self.whitelist_groups: List[str] = self._astr_config.get("whitelist_groups", [])
-        self.platform_name: str = self._astr_config.get("platform_name", "aiocqhttp")
-        
+
         # 管理员
         self.admin_users: List[str] = self._astr_config.get("admin_users", [])
         
@@ -55,7 +54,10 @@ class PluginConfig:
         self.holiday_cache_enabled: bool = self._astr_config.get("holiday_cache_enabled", True)
 
         #时区配置
-        self.timezone: str = self._astr_config.get("timezone", "Asia/Shanghai")    
+        self.timezone: str = self._astr_config.get("timezone", "Asia/Shanghai")
+        
+        #其他属性
+        self.indices_types: str = self._astr_config.get("indices_types", "1,3,5,6,7,8,9,10,11,14,15")
         
     def update_config(self, key: str, value: str) -> str:
         """更新单项配置并自动保存，返回提示信息"""
@@ -64,11 +66,11 @@ class PluginConfig:
             "api_host": "API Host",
             "default_city": "默认城市",
             "daily_push_time": "推送时间",
-            "platform_name": "平台名称",
             "llm_provider": "LLM 提供商",
             "llm_api_key": "LLM API Key",
             "llm_base_url": "LLM Base URL",
             "llm_model": "LLM 模型",
+            "indices_types": "生活指数类型",
         }
 
         if key in key_mapping:
