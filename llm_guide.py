@@ -64,22 +64,22 @@ class LLMGuideGenerator:
         else:
             greeting = f"今天是{weekday}，早上好！☀️"
             days_until_saturday = (6 - today.weekday()) % 7
-            if days_until_saturday == 0 or days_until_saturday == 6:
+            if days_until_saturday == 0 or days_until_saturday ==1:
                 rest_day_text = "今天是休息日！"
                 cheer_text = "好好享受这难得的放松时光吧 (◕‿◕)！"
-            elif days_until_saturday == 5:
+            elif days_until_saturday == 6:
                 rest_day_text = f"今天是周一"
                 cheer_text = "新的一周开始了，让我们一起加油吧b(￣▽￣)d！"
-            elif days_until_saturday == 4:
+            elif days_until_saturday == 5:
                 rest_day_text = f"今天是周二"
                 cheer_text = "怎么才周二？已经开始想念周末了(┬┬﹏┬┬)！"
-            elif days_until_saturday == 3:
+            elif days_until_saturday == 4:
                 rest_day_text = f"今天是周三"
                 cheer_text = "工作日马上就要过去一半了，如果工作有点疲劳的话就休息一下吧(￣﹃￣)！"
-            elif days_until_saturday == 2:
+            elif days_until_saturday == 3:
                 rest_day_text = f"距离休息日还有 {days_until_saturday} 天"
                 cheer_text = "加油，再坚持一下，美好的周末就在眼前 (•̀ᴗ•́)و！"
-            elif days_until_saturday == 1:
+            elif days_until_saturday == 2:
                 rest_day_text = f"距离休息日还有 {days_until_saturday} 天"
                 cheer_text = "明天就是周末了，我已经迫不及待了( •̀ ω •́ )✧!"
             holiday_message = ""
@@ -132,13 +132,13 @@ class LLMGuideGenerator:
 其他生活指数参考：
 {indices_text if indices_text else "无"}
 
-请结合今天的天气状况和星期数，用亲切、活泼的语气给用户一些实用的生活建议（建议文本可以多分几段）。
+请结合今天的天气状况和星期数，用亲切、活泼的语气给用户一些实用的生活建议（不要在其中加入指数名称）。
 要求：
-1. 适当使用 emoji 和颜文字，让回复更生动（例如 🌞☁️🌧️💨 (◕‿◕) (•̀ᴗ•́)و）。
+1. 适当使用 emoji 和颜文字并且多分几段，让回复更生动（例如 🌞☁️🌧️💨 (◕‿◕) (•̀ᴗ•́)و）。
 2. 根据气温和天气给出具体的穿衣建议。
 3. 如果空气质量不佳或紫外线强，要提醒用户防护。
 4. 语言简洁，分段清晰，不要用 markdown 格式。
-5. 不超过200字。"""
+5. 不超过100字。"""
 
         return prompt
 
