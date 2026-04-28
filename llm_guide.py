@@ -108,7 +108,7 @@ class LLMGuideGenerator:
                 lines.append(f"{name}：{category}（{text}）")
         indices_text = "\n".join(lines) if lines else ""
         # 构建完整提示词
-        prompt = f"""你是一个贴心的天气助手，请根据以下天气信息，为用户生成一段简洁、亲切的今日天气指南（不超过200字）。
+        prompt = f"""你是一个贴心的天气助手，请根据以下天气信息，为用户生成一段简洁、亲切的今日天气指南（不超过150字）。
 
 {greeting}
 """
