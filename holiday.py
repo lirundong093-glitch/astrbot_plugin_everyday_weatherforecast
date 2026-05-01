@@ -84,7 +84,7 @@ class HolidayChecker:
 
         today = datetime.now()
         year = today.year
-        date_str = today.strftime("%Y-%m-%d")
+        date_str = today.strftime("%m-%d")
 
         await self._ensure_year_cache(year)
 
