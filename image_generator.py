@@ -257,7 +257,7 @@ class WeatherImageGenerator:
         draw.line([(left_padding, 90), (left_width - left_padding, 90)], fill=line_color, width=1)
 
         # 第2部分：温度区域
-        temp_y_start = 110
+        temp_y_start = 90
         temp = weather_data.get("temperature", 0)
         temp_str = f"{temp:.0f}°" if temp == int(temp) else f"{temp:.1f}°"
         draw.text((left_padding, temp_y_start), temp_str, fill=text_main, font=self.font_temp_main)
