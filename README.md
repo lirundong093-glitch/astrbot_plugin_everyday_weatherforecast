@@ -6,7 +6,7 @@
 
 # 🌤️ 和风天气预报插件 (astrbot_plugin_weather)
 
-基于 AstrBot 框架与和风天气 API 开发的智能天气查询与推送插件，目前只支持aiohttp。支持生成可视化天气图片、每日定时推送、AI 智能生成生活指南（可选）。
+基于 AstrBot 框架与和风天气 API 开发的智能天气查询与推送插件，目前只支持aiohttp。支持生成可视化天气图片、每日定时推送、AI 智能生成生活指南（可选），推荐下载字体NotoSerifCJK。
 
 <p align="center">
   <img src="https://img.shields.io/badge/version-v1.1.1-blue" alt="Version">
