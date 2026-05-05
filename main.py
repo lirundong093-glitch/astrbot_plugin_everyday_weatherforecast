@@ -19,7 +19,7 @@ from .llm_guide import LLMGuideGenerator
 from .holiday import HolidayChecker
 
 
-@register("astrbot_plugin_weather", "Lucy", "和风天气预报插件", "2.0.0")
+@register("astrbot_plugin_everyday_weatherforecast", "Lucy", "和风天气预报插件", "1.1.1")
 class WeatherPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
@@ -85,17 +85,6 @@ class WeatherPlugin(Star):
             # 未配置管理员列表时，拒绝所有操作，引导配置
             return False
         return str(sender_id) in [str(uid) for uid in admin_users]
-
-    def _check_whitelist(self, event: AstrMessageEvent) -> bool:
-        """检查消息来源是否在白名单内（匹配完整会话标识符）"""
-        group_id = event.get_group_id()
-        if not group_id:
-            # 私聊等非群聊消息不作白名单限制
-            return True
-        platform_name = event.get_platform_name()
-        message_type = event.get_message_type()   # 通常为 GroupMessage
-        origin = f"{platform_name}:{message_type}:{group_id}"
-        return self.config.is_origin_allowed(origin)
 
     async def _get_weather_image(self, city: str) -> Optional[bytes]:
         """根据城市获取天气数据并生成图片字节流"""
@@ -175,8 +164,6 @@ class WeatherPlugin(Star):
     @filter.command("weather")
     async def weather(self, event: AstrMessageEvent):
         """查询天气指令：/weather 或 /weather 城市名"""
-        if not self._check_whitelist(event):
-            return
 
         if not self.config.qweather_key or not self.config.api_host:
             yield event.plain_result("⚠️ 请先配置和风天气 API Key 和 API Host")
