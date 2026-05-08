@@ -40,9 +40,8 @@
  
 ## 📥 安装与配置
 
-1. 将插件放入 AstrBot 的 `addons` 目录。
+1. 将插件放入 AstrBot 的 `plugins` 目录。
 2. 获取和风天气 API Key以及API host：前往 [和风天气控制台](https://console.qweather.com) 注册并创建应用。
-3. 该插件目前只支持通过指令来配置，请根据下列指令进行配置。
 
 ## 🤖 指令列表
 
