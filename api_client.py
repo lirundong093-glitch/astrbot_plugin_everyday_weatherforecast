@@ -65,39 +65,51 @@ class QWeatherClient:
             "User-Agent": "AstrBot-Weather-Plugin/2.0"
         }
 
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, params=params, headers=headers) as resp:
-                    if resp.status != 200:
-                        error_text = await resp.text()
-                        logger.error(f"API 请求失败: {url} 状态码: {resp.status}, 响应: {error_text[:300]}")
-                        return None
-                    data = await resp.json()
-
-                    # 标准和风天气格式
-                    if "code" in data:
-                        if data.get("code") != "200":
-                            logger.error(f"API 返回业务错误: {data}")
+        max_retries = 3
+        for attempt in range(1, max_retries + 1):
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(url, params=params, headers=headers) as resp:
+                        if resp.status != 200:
+                            error_text = await resp.text()
+                            logger.error(f"API 请求失败: {url} 状态码: {resp.status}, 响应: {error_text[:300]} (第 {attempt} 次尝试)")
+                            if attempt < max_retries:
+                                await asyncio.sleep(1)
+                                continue
                             return None
+    
+                        data = await resp.json()
+    
+                        # 标准和风天气格式
+                        if "code" in data:
+                            if data.get("code") != "200":
+                                logger.error(f"API 返回业务错误: {data} (第 {attempt} 次尝试)")
+                                if attempt < max_retries:
+                                    await asyncio.sleep(1)
+                                    continue
+                                return None
+                            return data
+    
+                        # TomTom 空气质素预报格式 (无 code，有 days)
+                        if "days" in data:
+                            logger.info("检测到 TomTom 格式响应，自动包装为和风兼容格式")
+                            wrapped = {
+                                "code": "200",
+                                "updateTime": data.get("metadata", {}).get("tag", ""),
+                                "tomtom_original": data
+                            }
+                            return wrapped
+    
+                        # 其他未知格式
+                        logger.warning(f"未知 API 响应格式，字段: {list(data.keys())} (第 {attempt} 次尝试)")
                         return data
-
-                    # TomTom 空气质素预报格式 (无 code，有 days)
-                    if "days" in data:
-                        logger.info("检测到 TomTom 格式响应，自动包装为和风兼容格式")
-                        # 包装成和风标准结构
-                        wrapped = {
-                            "code": "200",
-                            "updateTime": data.get("metadata", {}).get("tag", ""),
-                            "tomtom_original": data  # 保留原始数据
-                        }
-                        return wrapped
-
-                    # 其他未知格式
-                    logger.warning(f"未知 API 响应格式，字段: {list(data.keys())}")
-                    return data
-        except Exception as e:
-            logger.error(f"API 请求异常: {e}", exc_info=True)
-            return None
+                    
+            except Exception as e:
+                logger.error(f"API 请求异常 (第 {attempt} 次尝试): {e}", exc_info=True)
+                if attempt < max_retries:
+                    await asyncio.sleep(1)
+                else:
+                    return None
 
     async def _get_location_id_from_geoapi(self, city_name: str) -> Optional[Tuple[str, str]]:
         if not self.GEO_URL:
