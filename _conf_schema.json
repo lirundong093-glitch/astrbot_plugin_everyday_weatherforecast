@@ -72,11 +72,5 @@
     "type": "bool",
     "default": true,
     "hint": "开启后将会自动拉取节假日信息，并让llm在节假日定制专属于指定节假日的祝福"
-  },
-  "group_city_mapping": {
-    "description": "分群城市映射 (通过 Dashboard 管理页面配置，勿手动编辑)",
-    "type": "object",
-    "default": {},
-    "hint": "键为群聊标识符（如 napcat:GroupMessage:123456），值为城市名。请通过插件内置的「分群城市映射」页面管理。"
   }
 }

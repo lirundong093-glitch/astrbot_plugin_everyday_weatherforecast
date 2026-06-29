@@ -51,9 +51,6 @@ class PluginConfig:
         # 节假日
         self.holiday_cache_enabled: bool = self._astr_config.get("holiday_cache_enabled", True)
 
-        # 分群城市映射
-        self.group_city_mapping: dict = self._astr_config.get("group_city_mapping", {}) or {}
-
         #时区配置
         self.timezone: str = self._astr_config.get("timezone", "Asia/Shanghai")
         

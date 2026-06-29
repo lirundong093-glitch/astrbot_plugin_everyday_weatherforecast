@@ -1,6 +1,11 @@
-"""分群城市映射的 Web API 路由"""
+"""分群城市映射的 Web API 路由
 
+映射数据存储在 data/plugin_data/astrbot_plugin_everyday_weatherforecast/group_city_mapping.json
+"""
+
+import json
 import logging
+import os
 from typing import Any
 
 from quart import jsonify, request
@@ -12,12 +17,34 @@ PLUGIN_NAME = "astrbot_plugin_everyday_weatherforecast"
 _plugin: Any = None
 
 
+def _mapping_path() -> str:
+    return os.path.join(str(_plugin.plugin_data_dir), "group_city_mapping.json")
+
+
+def _read_mapping() -> dict:
+    path = _mapping_path()
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+
+def _write_mapping(mapping: dict):
+    path = _mapping_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(mapping, f, ensure_ascii=False, indent=2)
+
+
 def register_routes(context: Any, plugin: Any):
     global _plugin
     _plugin = plugin
 
     async def _list():
-        mapping = _plugin.config.group_city_mapping or {}
+        mapping = _read_mapping()
         items = [{"origin": k, "city": v} for k, v in sorted(mapping.items())]
         return jsonify({
             "items": items,
@@ -34,11 +61,9 @@ def register_routes(context: Any, plugin: Any):
         if not city:
             return jsonify({"message": "城市名不能为空", "ok": False})
 
-        mapping = dict(_plugin.config.group_city_mapping or {})
+        mapping = _read_mapping()
         mapping[origin] = city
-        _plugin.config._astr_config["group_city_mapping"] = mapping
-        _plugin.config._astr_config.save_config()
-        _plugin.config._sync_from_astr_config()
+        _write_mapping(mapping)
 
         logger.warning(f"[GroupCityAPI] set {origin} -> {city}")
         return jsonify({"message": "已保存 " + origin + " -> " + city})
@@ -50,14 +75,12 @@ def register_routes(context: Any, plugin: Any):
         if not origin:
             return jsonify({"message": "群标识符不能为空", "ok": False})
 
-        mapping = dict(_plugin.config.group_city_mapping or {})
+        mapping = _read_mapping()
         if origin not in mapping:
             return jsonify({"message": "未找到 " + origin + " 的映射", "ok": False})
 
         del mapping[origin]
-        _plugin.config._astr_config["group_city_mapping"] = mapping
-        _plugin.config._astr_config.save_config()
-        _plugin.config._sync_from_astr_config()
+        _write_mapping(mapping)
 
         logger.warning(f"[GroupCityAPI] deleted {origin}")
         return jsonify({"message": "已删除 " + origin})

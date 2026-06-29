@@ -134,9 +134,7 @@ class WeatherPlugin(Star):
 
         self.scheduler = WeatherScheduler(timezone_str=self.config.timezone)
         self.scheduler.set_callback(self._daily_push)
-        if self.config.daily_push_enabled and self.config.daily_push_time:
-            self.scheduler.update_schedule(self.config.daily_push_time)
-            self.scheduler.start()
+        self._scheduler_started = False
 
         # 注册 /weather 为 LLM 可调用的 FunctionTool
         self.context.add_llm_tools(WeatherTool(plugin=self))
@@ -144,11 +142,22 @@ class WeatherPlugin(Star):
         # 注册 Web API（分群城市映射管理页面）
         register_routes(self.context, self)
 
-        logger.info("天气预报插件已初始化")
+        logger.warning("天气预报插件已初始化")
 
     def _get_unified_origins(self) -> List[str]:
         """返回白名单中填写的完整会话标识符列表（直接用于发送）"""
         return self.config.whitelist_groups or []
+
+    def _read_group_city_mapping(self) -> dict:
+        """从 plugin_data 目录读取分群城市映射"""
+        import json as _json
+        path = self.plugin_data_dir / "group_city_mapping.json"
+        if path.exists():
+            try:
+                return _json.loads(path.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+        return {}
 
     def _check_admin(self, event: AstrMessageEvent) -> bool:
         """检查消息发送者是否在插件管理员列表中，未配置则拒绝"""
@@ -181,7 +190,7 @@ class WeatherPlugin(Star):
             logger.warning("[DailyPush] 白名单群列表为空，无法推送")
             return
 
-        mappings = self.config.group_city_mapping or {}
+        mappings = self._read_group_city_mapping()
         default_city = self.config.default_city or "北京"
         origins = self._get_unified_origins()
 
@@ -369,6 +378,10 @@ class WeatherPlugin(Star):
 
     async def start(self):
         await super().start()
+        if self._scheduler_started:
+            logger.warning("[Main] 调度器已启动过，跳过重复注册")
+            return
+        self._scheduler_started = True
         if self.config.daily_push_enabled and self.config.daily_push_time:
             self.scheduler.update_schedule(self.config.daily_push_time)
         self.scheduler.start()
