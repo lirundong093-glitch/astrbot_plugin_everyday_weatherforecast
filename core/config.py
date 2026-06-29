@@ -1,0 +1,136 @@
+import os
+import json
+from typing import List, Any
+from astrbot.api import AstrBotConfig, logger
+
+
+class PluginConfig:
+    """插件配置管理类（封装 AstrBotConfig）"""
+
+    def __init__(self, astr_config: AstrBotConfig, plugin_dir: str):
+        self._astr_config = astr_config
+        self.plugin_dir = plugin_dir
+        self._user_config_path = os.path.join(plugin_dir, "user_config.json")
+        self._migrate_legacy_config()
+        self._sync_from_astr_config()
+
+    def _migrate_legacy_config(self):
+        """如果存在旧的 user_config.json，将其合并到 AstrBotConfig 中并删除"""
+        if not os.path.exists(self._user_config_path):
+            return
+        try:
+            with open(self._user_config_path, "r", encoding="utf-8") as f:
+                legacy = json.load(f)
+            logger.info("检测到旧版 user_config.json，正在迁移到 AstrBot 配置系统...")
+            for key, value in legacy.items():
+                if key not in self._astr_config or self._astr_config.get(key) in [None, "", []]:
+                    self._astr_config[key] = value
+            self._astr_config.save_config()
+            os.rename(self._user_config_path, self._user_config_path + ".bak")
+            logger.info("旧版配置已迁移并备份为 .bak")
+        except Exception as e:
+            logger.error(f"迁移旧配置失败: {e}")
+
+    def _sync_from_astr_config(self):
+        """从 AstrBotConfig 同步所有配置属性"""
+        # 和风天气
+        self.qweather_key: str = self._astr_config.get("qweather_key", "")
+        self.api_host: str = self._astr_config.get("api_host", "devapi.qweather.com")
+        self.daily_push_enabled: bool = self._astr_config.get("daily_push_enabled", True)
+        self.default_city: str = self._astr_config.get("default_city", "北京")
+        self.daily_push_time: str = self._astr_config.get("daily_push_time", "08:00")
+        self.whitelist_groups: List[str] = self._astr_config.get("whitelist_groups", [])
+
+        # 管理员
+        self.admin_users: List[str] = self._astr_config.get("admin_users", [])
+        
+        # LLM
+        self.llm_enabled: bool = self._astr_config.get("llm_enabled", False)
+        self.provider_id: str = self._astr_config.get("provider_id", "")
+        
+        # 节假日
+        self.holiday_cache_enabled: bool = self._astr_config.get("holiday_cache_enabled", True)
+
+        # 分群城市映射
+        self.group_city_mapping: dict = self._astr_config.get("group_city_mapping", {}) or {}
+
+        #时区配置
+        self.timezone: str = self._astr_config.get("timezone", "Asia/Shanghai")
+        
+        #其他属性
+        self.indices_types: str = self._astr_config.get("indices_types", "1,3,5,6,7,8,9,10,11,14,15")
+        
+    def update_config(self, key: str, value: str) -> str:
+        """更新单项配置并自动保存，返回提示信息"""
+        key_mapping = {
+            "qweather_key": "和风天气 API Key",
+            "api_host": "API Host",
+            "default_city": "默认城市",
+            "daily_push_time": "推送时间",
+            "indices_types": "生活指数类型",
+        }
+
+        if key in key_mapping:
+            self._astr_config[key] = value
+            self._astr_config.save_config()
+            self._sync_from_astr_config()
+            return f"✅ {key_mapping[key]} 已更新为: {value}"
+
+        elif key == "llm_enabled":
+            enabled = value.lower() in ["true", "1", "yes", "on"]
+            self._astr_config[key] = enabled
+            self._astr_config.save_config()
+            self._sync_from_astr_config()
+            return f"✅ LLM 天气指南已{'开启' if enabled else '关闭'}"
+
+        elif key == "holiday_cache_enabled":
+            enabled = value.lower() in ["true", "1", "yes", "on"]
+            self._astr_config[key] = enabled
+            self._astr_config.save_config()
+            self._sync_from_astr_config()
+            return f"✅ 节假日功能已{'开启' if enabled else '关闭'}"
+
+        elif key == "whitelist_add":
+            current = list(self._astr_config.get("whitelist_groups", []))
+            if value not in current:
+                current.append(value)
+                self._astr_config["whitelist_groups"] = current
+                self._astr_config.save_config()
+                self._sync_from_astr_config()
+            return f"✅ 群 {value} 已加入白名单"
+
+        elif key == "whitelist_remove":
+            current = list(self._astr_config.get("whitelist_groups", []))
+            if value in current:
+                current.remove(value)
+                self._astr_config["whitelist_groups"] = current
+                self._astr_config.save_config()
+                self._sync_from_astr_config()
+            return f"✅ 群 {value} 已从白名单移除"
+
+        elif key == "admin_add":
+            current = list(self._astr_config.get("admin_users", []))
+            if value not in current:
+                current.append(value)
+                self._astr_config["admin_users"] = current
+                self._astr_config.save_config()
+                self._sync_from_astr_config()
+            return f"✅ 用户 {value} 已添加为管理员"
+
+        elif key == "admin_remove":
+            current = list(self._astr_config.get("admin_users", []))
+            if value in current:
+                current.remove(value)
+                self._astr_config["admin_users"] = current
+                self._astr_config.save_config()
+                self._sync_from_astr_config()
+            return f"✅ 用户 {value} 已从管理员列表移除"
+
+        else:
+            return f"❌ 未知配置项: {key}"
+
+    def is_origin_allowed(self, origin: str) -> bool:
+        """检查完整会话标识符是否在白名单中"""
+        if not self.whitelist_groups:
+            return True
+        return origin in self.whitelist_groups

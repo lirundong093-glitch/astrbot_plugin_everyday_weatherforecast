@@ -1,0 +1,76 @@
+{
+  "daily_push_enabled": {
+    "description": "启用每日定时天气播报",
+    "type": "bool",
+    "default": true,
+    "hint": "关闭后仅保留 /weather 基础查询功能，不启动定时推送"
+  },
+  "whitelist_groups": {
+    "description": "允许推送的群聊白名单（填入完整会话标识符）",
+    "type": "list",
+    "hint": "格式为 平台名:消息类型:群号，如: napcat:GroupMessage:1350989414, telegram:GroupMessage:123456。留空则忽略白名单检查。",
+    "default": []
+  },
+  "admin_users": {
+    "description": "插件管理员 ID 列表",
+    "type": "list",
+    "default": [],
+    "hint": "此处配置的用户可以使用 weather_config 等管理指令"
+  },
+  "default_city": {
+    "description": "默认查询城市",
+    "type": "string",
+    "default": "北京",
+    "hint": "输入/weather或者每日天气预报会查询天气的地址"
+  },
+  "timezone": {
+    "description": "定时推送所用时区",
+    "type": "string",
+    "default": "Asia/Shanghai",
+    "hint": "如 Asia/Shanghai、Asia/Tokyo、America/New_York 等"
+  },
+  "daily_push_time": {
+    "description": "每日天气推送时间",
+    "type": "string",
+    "default": "08:00",
+    "hint": "格式为 HH:MM，例如 08:00"
+  },    
+  "api_host": {
+    "description": "和风天气 API 主机地址",
+    "type": "string",
+    "default": "",
+    "hint": "你的host地址，格式为xxxxx.qweatherapi.com"
+  },
+  "qweather_key": {
+    "description": "和风天气 API Key",
+    "type": "string",
+    "default": "",
+    "required": true,
+    "obvious_hint": true
+  },
+  "llm_enabled": {
+    "description": "是否开启 LLM 天气指南",
+    "type": "bool",
+    "default": false,
+    "hint": "使用 AstrBot 内置 LLM Provider 生成"
+  },
+  "provider_id": {
+    "type": "string",
+    "description": "[LLM提供商] 用于生成天气指南的LLM提供商",
+    "_special": "select_provider",
+    "default": "",
+    "hint": "留空则使用默认提供商。建议选非推理模型（如 deepseek-chat）。"
+  },
+  "indices_types": {
+    "description": "为llm配置请求的生活指数类型，将用于生成生活指南",
+    "type": "string",
+    "default": "1,3,5,6,7,8,9,10,11,14,15",
+    "hint": "1: 运动,2: 洗车,3: 穿衣,4: 钓鱼,5: 紫外线,6: 旅游,7: 花粉过敏,8: 舒适度,9: 感冒,10: 空气污染扩散条件,11: 空调开启,12: 太阳镜,13: 化妆,14: 晾晒，15: 交通,16: 防晒"
+  },
+    "holiday_cache_enabled": {
+    "description": "是否启用节假日问候",
+    "type": "bool",
+    "default": true,
+    "hint": "开启后将会自动拉取节假日信息，并让llm在节假日定制专属于指定节假日的祝福"
+  }
+}
