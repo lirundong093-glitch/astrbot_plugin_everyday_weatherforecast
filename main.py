@@ -142,7 +142,7 @@ class WeatherPlugin(Star):
         # 注册 Web API（分群城市映射管理页面）
         register_routes(self.context, self)
 
-        logger.warning("天气预报插件已初始化")
+        logger.info("天气预报插件已初始化")
 
     def _get_unified_origins(self) -> List[str]:
         """返回白名单中填写的完整会话标识符列表（直接用于发送）"""
@@ -177,9 +177,9 @@ class WeatherPlugin(Star):
 
     async def _daily_push(self):
         """每日定时推送任务（被调度器回调）"""
-        logger.warning(f"[DailyPush] ========== 开始执行每日天气推送 ==========")
-        logger.warning(f"[DailyPush] 当前时间: {datetime.now()}")
-        logger.warning(f"[DailyPush] 默认城市: {self.config.default_city}")
+        logger.info(f"[DailyPush] ========== 开始执行每日天气推送 ==========")
+        logger.info(f"[DailyPush] 当前时间: {datetime.now()}")
+        logger.info(f"[DailyPush] 默认城市: {self.config.default_city}")
 
         # 1. 检查基本配置
         if not self.config.qweather_key or not self.config.api_host:
@@ -187,7 +187,7 @@ class WeatherPlugin(Star):
             return
 
         if not self.config.whitelist_groups:
-            logger.warning("[DailyPush] 白名单群列表为空，无法推送")
+            logger.info("[DailyPush] 白名单群列表为空，无法推送")
             return
 
         mappings = self._read_group_city_mapping()
@@ -201,7 +201,7 @@ class WeatherPlugin(Star):
             origin_city_map[origin] = city
 
         unique_cities = list(set(origin_city_map.values()))
-        logger.warning(f"[DailyPush] 共 {len(origins)} 个群, {len(unique_cities)} 个不同城市: {unique_cities}")
+        logger.info(f"[DailyPush] 共 {len(origins)} 个群, {len(unique_cities)} 个不同城市: {unique_cities}")
 
         # 3. 按城市获取天气数据 + 生成图片
         city_data: dict[str, dict | None] = {}  # city → weather_data or None
@@ -217,7 +217,7 @@ class WeatherPlugin(Star):
                 if weather_data:
                     break
                 if retry < 2:
-                    logger.warning(f"[DailyPush] {city} 获取失败，10秒后重试 ({retry+1}/3)")
+                    logger.info(f"[DailyPush] {city} 获取失败，10秒后重试 ({retry+1}/3)")
                     await asyncio.sleep(10)
 
             if not weather_data:
@@ -246,7 +246,7 @@ class WeatherPlugin(Star):
                 )
             city_guides[city] = guide
 
-            logger.warning(f"[DailyPush] {city} 天气数据已就绪, 图片: {len(image_bytes)} bytes")
+            logger.info(f"[DailyPush] {city} 天气数据已就绪, 图片: {len(image_bytes)} bytes")
 
         # 4. 向每个群发送对应城市的天气
         success_count = 0
@@ -255,7 +255,7 @@ class WeatherPlugin(Star):
 
             # 如果该城市天气获取失败，跳过
             if not city_data.get(city):
-                logger.warning(f"[DailyPush] ⏭ 跳过 {origin}（{city} 获取失败）")
+                logger.info(f"[DailyPush] ⏭ 跳过 {origin}（{city} 获取失败）")
                 continue
 
             tmp_path = city_tmp_files.get(city)
@@ -276,12 +276,12 @@ class WeatherPlugin(Star):
                         MessageChain().message(guide)
                     )
                 success_count += 1
-                logger.warning(f"[DailyPush] ✅ 成功向 {origin} 发送（{city}）")
+                logger.info(f"[DailyPush] ✅ 成功向 {origin} 发送（{city}）")
                 await asyncio.sleep(0.5)
             except Exception as e:
                 logger.error(f"[DailyPush] ❌ 向 {origin} 发送失败: {e}", exc_info=True)
 
-        logger.warning(f"[DailyPush] 推送完成: {success_count}/{len(origins)}")
+        logger.info(f"[DailyPush] 推送完成: {success_count}/{len(origins)}")
 
         # 5. 清理所有临时文件
         for tmp_path in city_tmp_files.values():
@@ -386,7 +386,7 @@ class WeatherPlugin(Star):
             self.scheduler.update_schedule(self.config.daily_push_time)
         self.scheduler.start()
         jobs = self.scheduler.scheduler.get_jobs()
-        logger.warning(f"[Main] 调度器已启动，当前任务数: {len(jobs)}")
+        logger.info(f"[Main] 调度器已启动，当前任务数: {len(jobs)}")
 
     async def terminate(self):
         self.scheduler.shutdown()
